@@ -75,7 +75,7 @@
             resultType="io.metersphere.project.dto.DropNode">
         SELECT id, pos
         FROM test_plan_functional_case
-        WHERE test_plan_id = #{parentId}
+        WHERE test_plan_collection_id = #{parentId}
         <if test="operator == 'moreThan'">
             AND pos &gt; #{pos}
         </if>
@@ -111,12 +111,15 @@
             test_plan_functional_case.test_plan_id as testPlanId,
             test_plan_functional_case.id,
             project.name as projectName,
-            project.id as projectId
+            project.id as projectId,
+            test_plan_functional_case.test_plan_collection_id as testPlanCollectionId,
+            test_plan_collection.name as testPlanCollectionName
         FROM
             functional_case
         inner join project on functional_case.project_id = project.id
         inner join test_plan_functional_case on functional_case.id = test_plan_functional_case.functional_case_id
-        LEFT JOIN project_version ON  functional_case.version_id = project_version.id
+        inner JOIN project_version ON  functional_case.version_id = project_version.id
+        inner join test_plan_collection on test_plan_collection.id = test_plan_functional_case.test_plan_collection_id
         where functional_case.deleted = #{deleted}
         and test_plan_functional_case.test_plan_id = #{request.testPlanId}
         <include refid="queryWhereCondition"/>
@@ -142,11 +145,8 @@
             or functional_case.num like concat('%', #{request.keyword},'%')
             )
         </if>
-        <if test="request.collectionIds != null and request.collectionIds.size() > 0">
-            and test_plan_functional_case.test_plan_collection_id in
-            <foreach collection="request.collectionIds" item="collectionId" separator="," open="(" close=")">
-                #{collectionId}
-            </foreach>
+        <if test="request.collectionId != null and request.collectionId != ''">
+            and test_plan_functional_case.test_plan_collection_id = #{request.collectionId}
         </if>
         <include refid="filters">
             <property name="filter" value="request.filter"/>
@@ -180,11 +180,8 @@
             or functional_case.tags like concat('%', #{request.condition.keyword},'%')
             )
         </if>
-        <if test="request.collectionIds != null and request.collectionIds.size() > 0">
-            and test_plan_functional_case.test_plan_collection_id in
-            <foreach collection="request.collectionIds" item="collectionId" separator="," open="(" close=")">
-                #{collectionId}
-            </foreach>
+        <if test="request.collectionId != null and request.collectionId != ''">
+            and test_plan_functional_case.test_plan_collection_id = #{request.collectionId}
         </if>
         <include refid="filters">
             <property name="filter" value="request.condition.filter"/>
@@ -538,4 +535,24 @@
         </foreach>
     </update>
 
+    <select id="getMaxPosByCollectionId" resultType="java.lang.Long">
+        SELECT max(pos)
+        FROM test_plan_functional_case
+        WHERE test_plan_collection_id = #{0}
+    </select>
+
+    <select id="collectionCountByRequest" resultType="io.metersphere.project.dto.ModuleCountDTO">
+        SELECT
+            test_plan_functional_case.test_plan_collection_id AS moduleId,
+            count( test_plan_functional_case.id ) AS dataCount
+        FROM
+            functional_case
+                INNER JOIN test_plan_functional_case ON functional_case.id = test_plan_functional_case.functional_case_id
+        WHERE
+            functional_case.deleted = FALSE
+          AND test_plan_functional_case.test_plan_id = #{request.testPlanId}
+        <include refid="queryWhereCondition"/>
+        GROUP BY
+            test_plan_functional_case.test_plan_collection_id
+    </select>
 </mapper>

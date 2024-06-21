@@ -99,7 +99,7 @@
   import useModal from '@/hooks/useModal';
   import useAppStore from '@/store/modules/app';
   import useFeatureCaseStore from '@/store/modules/case/featureCase';
-  import { mapTree } from '@/utils';
+  import { mapTree, traverseTree } from '@/utils';
   import { hasAnyPermission } from '@/utils/permission';
 
   import type { CreateOrUpdateModule, UpdateModule } from '@/models/caseManagement/featureCase';
@@ -183,13 +183,20 @@
       });
       featureCaseStore.setModulesTree(caseTree.value);
       featureCaseStore.setModuleId(['all']);
+
       if (isSetDefaultKey) {
         selectedNodeKeys.value = [caseTree.value[0].id];
+        const offspringIds: string[] = [];
+        mapTree(caseTree.value[0].children || [], (e) => {
+          offspringIds.push(e.id);
+          return e;
+        });
+
+        emits('caseNodeSelect', selectedNodeKeys.value, offspringIds);
       }
       emits(
         'init',
-        caseTree.value.map((e) => e.name),
-        isSetDefaultKey
+        caseTree.value.map((e) => e.name)
       );
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -214,7 +221,11 @@
         try {
           await deleteCaseModuleTree(node.id);
           Message.success(t('caseManagement.featureCase.deleteSuccess'));
-          initModules(true);
+          emits(
+            'init',
+            caseTree.value.map((e) => e.name),
+            true
+          );
         } catch (error) {
           console.log(error);
         }
@@ -369,27 +380,15 @@
     };
   });
 
-  watch(
-    () => props.activeFolder,
-    (val) => {
-      if (val === 'all') {
-        initModules();
-      }
-    }
-  );
-
   /**
    * 初始化模块文件数量
    */
   watch(
     () => props.modulesCount,
     (obj) => {
-      caseTree.value = mapTree<ModuleTreeNode>(caseTree.value, (node) => {
-        return {
-          ...node,
-          hideMoreAction: node.id === 'root' || props.isModal,
-          count: obj?.[node.id] || 0,
-        };
+      traverseTree(caseTree.value, (node) => {
+        node.count = obj?.[node.id] || 0;
+        node.hideMoreAction = node.id === 'root' || props.isModal;
       });
     }
   );

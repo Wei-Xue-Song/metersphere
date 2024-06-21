@@ -40,4 +40,11 @@ export default {
   'report.detail.apiCaseDetails': 'Api use case details',
   'report.detail.scenarioCaseDetails': 'Scenario use case details',
   'report.detail.oneClickSummary': 'One click report summary',
+  'report.detail.testPlanTotal': 'Total plan',
+  'report.detail.testPlanCaseTotal': 'Total use cases',
+  'report.detail.testPlanGroup.result': 'Result',
+  'report.detail.testPlanGroup.useCasesCount': 'Use cases',
+  'report.detail.testPlanGroup.viewReport': 'View Report',
+  'report.detail.testReport': 'Test report',
+  'report.detail.testPlanGroupReport': 'Test group report',
 };

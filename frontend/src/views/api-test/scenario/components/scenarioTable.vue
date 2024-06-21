@@ -132,6 +132,8 @@
           :module-type="ReportEnum.API_SCENARIO_REPORT"
           :status="record.lastReportStatus ? record.lastReportStatus : 'PENDING'"
           :script-identifier="record.scriptIdentifier"
+          :class="record.lastReportId ? 'cursor-pointer' : ''"
+          @click="openScenarioReportDrawer(record)"
         />
       </template>
       <template #stepTotal="{ record }">
@@ -483,6 +485,12 @@
     :batch-run-func="batchRunScenario"
     @finished="loadScenarioList"
   />
+  <!-- 场景报告抽屉 -->
+  <caseAndScenarioReportDrawer
+    v-model:visible="showScenarioReportVisible"
+    is-scenario
+    :report-id="tableRecord?.lastReportId || ''"
+  />
 </template>
 
 <script setup lang="ts">
@@ -502,11 +510,13 @@
   import type { CaseLevel } from '@/components/business/ms-case-associate/types';
   import type { MsTreeNodeData } from '@/components/business/ms-tree/types';
   import apiStatus from '@/views/api-test/components/apiStatus.vue';
+  import caseAndScenarioReportDrawer from '@/views/api-test/components/caseAndScenarioReportDrawer.vue';
   import ExecutionStatus from '@/views/api-test/report/component/reportStatus.vue';
   import BatchRunModal from '@/views/api-test/scenario/components/batchRunModal.vue';
   import operationScenarioModuleTree from '@/views/api-test/scenario/components/operationScenarioModuleTree.vue';
 
-  import { getEnvList, getPoolId, getPoolOption } from '@/api/modules/api-test/management';
+  import { getEnvList } from '@/api/modules/api-test/common';
+  import { getPoolId, getPoolOption } from '@/api/modules/api-test/management';
   import {
     batchEditScenario,
     batchOptionScenario,
@@ -1430,6 +1440,14 @@
     }
   }
 
+  const showScenarioReportVisible = ref(false);
+  function openScenarioReportDrawer(record: ApiScenarioTableItem) {
+    if (record.lastReportId) {
+      tableRecord.value = record;
+      showScenarioReportVisible.value = true;
+    }
+  }
+
   onBeforeMount(() => {
     loadScenarioList();
   });
@@ -1452,15 +1470,12 @@
   :deep(.param-input:not(.arco-input-focus, .arco-select-view-focus)) {
     &:not(:hover) {
       border-color: transparent !important;
-
       .arco-input::placeholder {
         @apply invisible;
       }
-
       .arco-select-view-icon {
         @apply invisible;
       }
-
       .arco-select-view-value {
         color: var(--color-text-brand);
       }

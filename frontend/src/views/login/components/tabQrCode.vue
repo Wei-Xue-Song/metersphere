@@ -1,22 +1,29 @@
 <template>
-  <a-radio-group v-model:active-key="activeName" type="button" class="tabPlatform" @change="handleClick">
-    <a-radio value="wecom" class="radioOneButton">{{ t('project.messageManagement.WE_COM') }}</a-radio>
-    <a-radio value="dingtalk" class="radioOneButton">{{ t('project.messageManagement.DING_TALK') }}</a-radio>
+  <a-radio-group v-if="activeName != ''" v-model="activeName" type="button" class="tabPlatform" @change="handleClick">
+    <a-radio
+      v-for="item of orgOptions"
+      :key="item.value"
+      :value="item.value"
+      :v-show="item.label"
+      class="radioOneButton"
+    >
+      {{ t('project.messageManagement.' + item.value) }}
+    </a-radio>
     <!--    <a-tab-pane key="lark" :title="t('project.messageManagement.LARK')"></a-tab-pane>
     <a-tab-pane key="larksuite" :title="t('project.messageManagement.LARK_SUITE')"></a-tab-pane>-->
   </a-radio-group>
-  <div v-if="activeName === 'wecom'" class="login-qrcode">
+  <div v-if="activeName === 'WE_COM'" class="login-qrcode">
     <div class="qrcode">
-      <wecom-qr v-if="activeName === 'wecom'" />
+      <wecom-qr v-if="activeName === 'WE_COM'" />
     </div>
   </div>
-  <div v-if="activeName === 'dingtalk'" class="login-qrcode">
+  <div v-if="activeName === 'DING_TALK'" class="login-qrcode">
     <div class="qrcode">
       <div class="title">
         <MsIcon type="icon-logo_dingtalk" size="24"></MsIcon>
         钉钉登录
       </div>
-      <ding-talk-qr v-if="activeName === 'dingtalk'" />
+      <ding-talk-qr v-if="activeName === 'DING_TALK'" />
     </div>
   </div>
   <!--
@@ -40,37 +47,58 @@
   import dingTalkQr from './dingTalkQrCode.vue';
   import WecomQr from './weComQrCode.vue';
 
+  import { getPlatformParamUrl } from '@/api/modules/user';
+
   const { t } = useI18n();
 
   const activeName = ref('');
+
+  interface qrOption {
+    value: string;
+    label: string;
+  }
+
+  const orgOptions = ref<qrOption[]>([]);
   const props = defineProps<{
-    tabName: string;
+    tabName: string | number | boolean | Record<string, unknown> | undefined;
   }>();
+  function handleClick(val: string | number | boolean) {
+    if (typeof val === 'string') {
+      activeName.value = val;
+    }
+  }
   const initActive = () => {
-    const qrArray = ['wecom', 'dingtalk', 'lark', 'larksuite'];
-    for (let i = 0; i < qrArray.length; i++) {
-      const key = qrArray[i];
+    for (let i = 0; i < orgOptions.value.length; i++) {
+      const key = orgOptions.value[i].value;
       if (props.tabName === key) {
-        activeName.value = key;
+        nextTick(() => {
+          handleClick(key);
+        });
         break;
       }
     }
   };
-  function handleClick(val: string | number | boolean) {
-    if (typeof val === 'string') {
-      activeName.value = val;
-    } else {
-      activeName.value = 'wecom';
+  async function initPlatformInfo() {
+    try {
+      const res = await getPlatformParamUrl();
+      orgOptions.value = res.map((e) => ({
+        label: e.name,
+        value: e.id,
+      }));
+      initActive();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.log(error);
     }
   }
   onMounted(() => {
-    initActive();
+    initPlatformInfo();
   });
 </script>
 
 <style lang="less" scoped>
   .tabPlatform {
-    width: 400px;
+    min-width: 480px;
     height: 40px;
   }
   .login-qrcode {
@@ -106,7 +134,7 @@
     }
   }
   .radioOneButton {
-    width: 200px;
+    width: 100%;
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;

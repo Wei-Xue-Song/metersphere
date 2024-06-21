@@ -2,7 +2,11 @@
   <div class="p-[16px]">
     <a-input
       v-model:model-value="moduleKeyword"
-      :placeholder="t('caseManagement.caseReview.folderSearchPlaceholder')"
+      :placeholder="
+        props.treeType === 'MODULE'
+          ? t('caseManagement.caseReview.folderSearchPlaceholder')
+          : t('testPlan.testPlanGroup.newPlanPlaceHolder')
+      "
       allow-clear
       class="mb-[8px]"
       :max-length="255"
@@ -10,7 +14,7 @@
     <MsFolderAll
       v-model:isExpandAll="isExpandAll"
       :active-folder="activeFolder"
-      :folder-name="t('apiScenario.allScenario')"
+      :folder-name="t('caseManagement.featureCase.sceneCase')"
       :all-count="allCount"
       @set-active-folder="setActiveFolder"
     />
@@ -54,18 +58,20 @@
   import MsTree from '@/components/business/ms-tree/index.vue';
   import type { MsTreeNodeData } from '@/components/business/ms-tree/types';
 
-  import { getFeatureCaseModule } from '@/api/modules/test-plan/testPlan';
+  import { getApiScenarioModule } from '@/api/modules/test-plan/testPlan';
   import { useI18n } from '@/hooks/useI18n';
   import { mapTree } from '@/utils';
+  import { getNodeParentId } from '@/utils/tree';
 
   import { ModuleTreeNode } from '@/models/common';
 
   const props = defineProps<{
     modulesCount?: Record<string, number>; // 模块数量统计对象
     selectedKeys: string[]; // 选中的节点 key
+    treeType: 'MODULE' | 'COLLECTION';
   }>();
   const emit = defineEmits<{
-    (e: 'folderNodeSelect', ids: string[], _offspringIds: string[], nodeName?: string): void;
+    (e: 'folderNodeSelect', ids: string[], _offspringIds: string[], nodeName?: string, parentId?: string): void;
     (e: 'init', params: ModuleTreeNode[]): void;
   }>();
 
@@ -83,7 +89,18 @@
 
   const activeFolder = ref<string>('all');
   const allCount = ref(0);
-  const isExpandAll = ref(false);
+  const isExpandAll = ref<boolean | undefined>(false);
+
+  watch(
+    () => props.treeType,
+    (val) => {
+      if (val === 'COLLECTION') {
+        isExpandAll.value = undefined;
+      } else {
+        isExpandAll.value = false;
+      }
+    }
+  );
 
   function setActiveFolder(id: string) {
     activeFolder.value = id;
@@ -99,8 +116,7 @@
   async function initModules() {
     try {
       loading.value = true;
-      // TODO 联调
-      const res = await getFeatureCaseModule(route.query.id as string);
+      const res = await getApiScenarioModule({ testPlanId: route.query.id as string, treeType: props.treeType });
       folderTree.value = mapTree<ModuleTreeNode>(res, (node) => {
         return {
           ...node,
@@ -124,7 +140,7 @@
       return e;
     });
     activeFolder.value = node.id;
-    emit('folderNodeSelect', _selectedKeys as string[], offspringIds, node.name);
+    emit('folderNodeSelect', _selectedKeys as string[], offspringIds, node.name, getNodeParentId(node));
   }
 
   onBeforeMount(() => {
@@ -146,6 +162,7 @@
   );
 
   defineExpose({
+    setActiveFolder,
     initModules,
   });
 </script>

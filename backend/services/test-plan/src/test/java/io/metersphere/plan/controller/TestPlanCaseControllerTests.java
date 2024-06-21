@@ -8,12 +8,14 @@ import io.metersphere.functional.domain.FunctionalCaseBlob;
 import io.metersphere.functional.dto.FunctionalCaseDetailDTO;
 import io.metersphere.functional.dto.FunctionalCaseStepDTO;
 import io.metersphere.functional.mapper.FunctionalCaseBlobMapper;
+import io.metersphere.plan.constants.AssociateCaseType;
 import io.metersphere.plan.domain.TestPlanCaseExecuteHistory;
 import io.metersphere.plan.domain.TestPlanFunctionalCase;
 import io.metersphere.plan.domain.TestPlanFunctionalCaseExample;
 import io.metersphere.plan.dto.request.*;
 import io.metersphere.plan.mapper.TestPlanCaseExecuteHistoryMapper;
 import io.metersphere.plan.mapper.TestPlanFunctionalCaseMapper;
+import io.metersphere.plan.service.TestPlanFunctionalCaseService;
 import io.metersphere.provider.BaseAssociateBugProvider;
 import io.metersphere.request.AssociateBugPageRequest;
 import io.metersphere.request.BugPageProviderRequest;
@@ -21,6 +23,8 @@ import io.metersphere.sdk.util.JSON;
 import io.metersphere.system.base.BaseTest;
 import io.metersphere.system.controller.handler.ResultHolder;
 import io.metersphere.system.domain.User;
+import io.metersphere.system.dto.sdk.SessionUser;
+import io.metersphere.system.dto.user.UserDTO;
 import jakarta.annotation.Resource;
 import org.apache.commons.collections.CollectionUtils;
 import org.junit.jupiter.api.*;
@@ -35,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -44,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class TestPlanCaseControllerTests extends BaseTest {
 
     public static final String FUNCTIONAL_CASE_LIST_URL = "/test-plan/functional/case/page";
-    public static final String FUNCTIONAL_CASE_TREE_URL = "/test-plan/functional/case/tree/";
+    public static final String FUNCTIONAL_CASE_TREE_URL = "/test-plan/functional/case/tree";
     public static final String FUNCTIONAL_CASE_TREE_COUNT_URL = "/test-plan/functional/case/module/count";
     public static final String FUNCTIONAL_CASE_DISASSOCIATE_URL = "/test-plan/functional/case/disassociate";
     public static final String FUNCTIONAL_CASE_BATCH_DISASSOCIATE_URL = "/test-plan/functional/case/batch/disassociate";
@@ -58,6 +63,7 @@ public class TestPlanCaseControllerTests extends BaseTest {
 
     public static final String FUNCTIONAL_CASE_EXEC_HISTORY_URL = "/test-plan/functional/case/exec/history";
     public static final String USER_URL = "/test-plan/functional/case/user-option/";
+    public static final String FUNCTIONAL_CASE_BATCH_MOVE_URL = "/test-plan/functional/case/batch/move";
     @Resource
     private TestPlanFunctionalCaseMapper testPlanFunctionalCaseMapper;
     @Resource
@@ -68,6 +74,8 @@ public class TestPlanCaseControllerTests extends BaseTest {
     BugRelationCaseMapper bugRelationCaseMapper;
     @Resource
     FunctionalCaseBlobMapper functionalCaseBlobMapper;
+    @Resource
+    private TestPlanFunctionalCaseService testPlanFunctionalCaseService;
 
 
     @Test
@@ -93,26 +101,40 @@ public class TestPlanCaseControllerTests extends BaseTest {
     @Test
     @Order(2)
     public void testGetFunctionalCaseTree() throws Exception {
-        MvcResult mvcResult = this.requestGetWithOkAndReturn(FUNCTIONAL_CASE_TREE_URL + "plan_1");
+        TestPlanTreeRequest request = new TestPlanTreeRequest();
+        request.setTestPlanId("plan_1");
+        request.setTreeType("MODULE");
+        this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_TREE_URL, request);
+        request.setTestPlanId("plan_2");
+        MvcResult mvcResult = this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_TREE_URL, request);
         String returnData = mvcResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
         ResultHolder resultHolder = JSON.parseObject(returnData, ResultHolder.class);
         Assertions.assertNotNull(resultHolder);
 
-        this.requestGetWithOkAndReturn(FUNCTIONAL_CASE_TREE_URL + "plan_2");
+        request.setTestPlanId("plan_2");
+        request.setTreeType("COLLECTION");
+        MvcResult mvcResult1 = this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_TREE_URL, request);
+        String returnData1 = mvcResult1.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        ResultHolder resultHolder1 = JSON.parseObject(returnData1, ResultHolder.class);
+        Assertions.assertNotNull(resultHolder1);
     }
 
     @Test
     @Order(3)
     public void testGetFunctionalCaseTreeCount() throws Exception {
-        TestPlanCaseRequest request = new TestPlanCaseRequest();
+        TestPlanCaseModuleRequest request = new TestPlanCaseModuleRequest();
         request.setProjectId("123");
         request.setCurrent(1);
         request.setPageSize(10);
         request.setTestPlanId("plan_1");
+        request.setTreeType("MODULE");
         MvcResult mvcResult = this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_TREE_COUNT_URL, request);
         String returnData = mvcResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
         ResultHolder resultHolder = JSON.parseObject(returnData, ResultHolder.class);
         Assertions.assertNotNull(resultHolder);
+
+        request.setTreeType("COLLECTION");
+        this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_TREE_COUNT_URL, request);
     }
 
 
@@ -261,7 +283,7 @@ public class TestPlanCaseControllerTests extends BaseTest {
     @Test
     @Order(16)
     public void testGetDetail() throws Exception {
-       this.requestGet(FUNCTIONAL_CASE_DETAIL + "relate_case_1").andExpect(status().is5xxServerError());
+        this.requestGet(FUNCTIONAL_CASE_DETAIL + "relate_case_1").andExpect(status().is5xxServerError());
         MvcResult mvcResult = this.requestGetWithOkAndReturn(FUNCTIONAL_CASE_DETAIL + "gyq_disassociate_case_4");
         String returnData = mvcResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
         ResultHolder resultHolder = JSON.parseObject(returnData, ResultHolder.class);
@@ -331,4 +353,39 @@ public class TestPlanCaseControllerTests extends BaseTest {
         List<User> list = JSON.parseArray(JSON.toJSONString(resultHolder.getData()), User.class);
         Assertions.assertFalse(list.isEmpty());
     }
+
+
+    @Test
+    @Order(17)
+    public void testFunctionalAssociate() throws Exception {
+        Map<String, List<BaseCollectionAssociateRequest>> collectionAssociates = new HashMap<>();
+        List<BaseCollectionAssociateRequest> baseCollectionAssociateRequests = new ArrayList<>();
+        BaseCollectionAssociateRequest baseCollectionAssociateRequest = new BaseCollectionAssociateRequest();
+        baseCollectionAssociateRequest.setCollectionId("123");
+        baseCollectionAssociateRequest.setIds(List.of("fc_1"));
+        baseCollectionAssociateRequests.add(baseCollectionAssociateRequest);
+        collectionAssociates.put(AssociateCaseType.FUNCTIONAL, baseCollectionAssociateRequests);
+        UserDTO userDTO = new UserDTO();
+        userDTO.setId(sessionId);
+        userDTO.setName("admin");
+        userDTO.setLastOrganizationId("wxx_1234");
+        SessionUser user = SessionUser.fromUser(userDTO, sessionId);
+        testPlanFunctionalCaseService.associateCollection("plan_1", collectionAssociates, user);
+
+        baseCollectionAssociateRequest.setCollectionId("wxxx1231_1");
+        baseCollectionAssociateRequests.add(baseCollectionAssociateRequest);
+        collectionAssociates.put(AssociateCaseType.FUNCTIONAL, baseCollectionAssociateRequests);
+        Assertions.assertThrows(Exception.class, () -> testPlanFunctionalCaseService.associateCollection("plan_1", collectionAssociates, user));
+    }
+
+    @Test
+    @Order(18)
+    public void testFunctionalBatchMove() throws Exception {
+        BaseBatchMoveRequest request = new BaseBatchMoveRequest();
+        request.setTestPlanId("plan_1");
+        request.setTargetCollectionId("wxxx_1");
+        request.setSelectAll(true);
+        this.requestPostWithOk(FUNCTIONAL_CASE_BATCH_MOVE_URL, request);
+    }
+
 }

@@ -8,9 +8,9 @@ export interface countDetail {
 export interface PlanReportDetail {
   id: string;
   name: string;
-  startTime: number;
-  executeTime: number; // 报告执行开始时间
-  endTime: number;
+  startTime: number; // 报告执行开始时间
+  createTime: number; // 报告生成时间
+  endTime: number; // 报告执行结束时间
   summary: string;
   passThreshold: number; // 通过阈值
   passRate: number; // 通过率
@@ -19,10 +19,17 @@ export interface PlanReportDetail {
   caseTotal: number;
   executeCount: countDetail;
   functionalCount: countDetail;
-  // TOTO 这个版本不展示场景和接口
-  // apiCaseCount: countDetail; // 接口场景用例分析-用例数
-  // apiScenarioCount: countDetail; // 接口场景用例分析-用例数
+  apiCaseCount: countDetail; // 接口场景用例分析-用例数
+  apiScenarioCount: countDetail; // 接口场景用例分析-用例数
+  planCount: number;
+  passCountOfPlan: number; // 计划通过数量
+  failCountOfPlan: number; // 计划未通过数量
+  functionalBugCount: number; // 用例明细bug总数
+  apiBugCount: number; // 接口用例明细bug总数
+  scenarioBugCount: number; // 场景用例明细bug总数
 }
+
+export type AnalysisType = 'FUNCTIONAL' | 'API' | 'SCENARIO';
 
 export interface ReportMetricsItemModel {
   unit: string;

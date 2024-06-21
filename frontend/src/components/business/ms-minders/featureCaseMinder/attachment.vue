@@ -2,6 +2,7 @@
   <a-spin :loading="attachmentLoading" class="block h-full pl-[16px]">
     <MsAddAttachment
       v-model:file-list="fileList"
+      :disabled="!hasEditPermission"
       multiple
       only-button
       @change="(files, file) => handleFileChange(file ? [file] : [])"
@@ -36,23 +37,19 @@
           >
             {{ t('ms.upload.preview') }}
           </MsButton>
+          <MsButton type="button" status="primary" class="!mr-[4px]" @click="transferFile(item)">
+            {{ t('caseManagement.featureCase.storage') }}
+          </MsButton>
           <SaveAsFilePopover
-            v-model:visible="transferVisible"
+            v-if="item.status !== 'init'"
             :saving-file="activeTransferFileParams"
             :file-save-as-source-id="activeCase.id || ''"
             :file-save-as-api="transferFileRequest"
             :file-module-options-api="getTransferFileTree"
             source-id-key="caseId"
-          />
-          <MsButton
-            v-if="item.status !== 'init'"
-            type="button"
-            status="primary"
-            class="!mr-[4px]"
-            @click="transferFile(item)"
           >
-            {{ t('caseManagement.featureCase.storage') }}
-          </MsButton>
+            <span :id="item.uid"></span>
+          </SaveAsFilePopover>
           <MsButton
             v-if="item.status !== 'init'"
             type="button"
@@ -81,6 +78,7 @@
             v-if="activeCase.id && item.isUpdateFlag"
             type="button"
             status="primary"
+            :disabled="!hasEditPermission"
             @click="handleUpdateFile(item)"
           >
             {{ t('common.update') }}
@@ -125,6 +123,7 @@
   import useModal from '@/hooks/useModal';
   import useAppStore from '@/store/modules/app';
   import { downloadByteFile } from '@/utils';
+  import { hasAnyPermission } from '@/utils/permission';
 
   import { AssociatedList } from '@/models/caseManagement/featureCase';
   import { TableQueryParams } from '@/models/common';
@@ -151,6 +150,7 @@
       hiddenIds: [],
     },
   });
+  const hasEditPermission = hasAnyPermission(['FUNCTIONAL_CASE:READ+UPDATE']);
 
   // 监视文件列表处理关联和本地文件
   watch(
@@ -194,7 +194,7 @@
           return item;
         });
       }
-      Message.success(t('ms.upload.uploadSuccess'));
+      Message.success(t('common.linkSuccess'));
       emit('uploadSuccess');
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -240,14 +240,12 @@
     }
   }
 
-  const transferVisible = ref<boolean>(false);
-
   const activeTransferFileParams = ref<MsFileItem>();
 
   // 转存
   function transferFile(item: MsFileItem) {
     activeTransferFileParams.value = { ...item };
-    transferVisible.value = true;
+    document.getElementById(item.uid)?.click();
   }
 
   // 删除本地文件

@@ -136,6 +136,9 @@ public class ApiDefinitionService extends MoveNodeService {
     private ApiDefinitionNoticeService apiDefinitionNoticeService;
 
     public List<ApiDefinitionDTO> getApiDefinitionPage(ApiDefinitionPageRequest request, String userId) {
+        if (CollectionUtils.isEmpty(request.getProtocols())) {
+            return new ArrayList<>();
+        }
         CustomFieldUtils.setBaseQueryRequestCustomMultipleFields(request, userId);
         List<ApiDefinitionDTO> list = extApiDefinitionMapper.list(request);
         processApiDefinitions(list);
@@ -143,6 +146,9 @@ public class ApiDefinitionService extends MoveNodeService {
     }
 
     public List<ApiDefinitionDTO> getDocPage(ApiDefinitionPageRequest request, String userId) {
+        if (CollectionUtils.isEmpty(request.getProtocols())) {
+            return new ArrayList<>();
+        }
         CustomFieldUtils.setBaseQueryRequestCustomMultipleFields(request, userId);
         List<ApiDefinitionDTO> list = extApiDefinitionMapper.list(request);
         if (!CollectionUtils.isEmpty(list)) {
@@ -295,35 +301,45 @@ public class ApiDefinitionService extends MoveNodeService {
         // 记录更新前的数据
         apiDefinitionLogService.batchUpdateLog(ids, userId, request.getProjectId());
         if (CollectionUtils.isNotEmpty(ids)) {
-            if ("tags".equals(request.getType())) {
-                handleTags(request, userId, ids);
-            } else if ("customs".equals(request.getType())) {
-                // 自定义字段处理
-                ApiDefinitionCustomFieldDTO customField = request.getCustomField();
-                List<ApiDefinitionCustomField> list = new ArrayList<>();
-                ApiDefinitionCustomField apiDefinitionCustomField = new ApiDefinitionCustomField();
-                apiDefinitionCustomField.setFieldId(customField.getId());
-                apiDefinitionCustomField.setValue(customField.getValue());
-                list.add(apiDefinitionCustomField);
-                ApiDefinitionUpdateRequest apiDefinitionUpdateRequest = new ApiDefinitionUpdateRequest();
-                BeanUtils.copyBean(apiDefinitionUpdateRequest, request);
-                apiDefinitionUpdateRequest.setCustomFields(list);
-                ids.forEach(id -> {
-                    apiDefinitionUpdateRequest.setId(id);
-                    handleUpdateCustomFields(apiDefinitionUpdateRequest, request.getProjectId());
-                });
-            } else {
-                ApiDefinition apiDefinition = new ApiDefinition();
-                BeanUtils.copyBean(apiDefinition, request);
-                apiDefinition.setUpdateUser(userId);
-                apiDefinition.setUpdateTime(System.currentTimeMillis());
-                ApiDefinitionExample apiDefinitionExample = new ApiDefinitionExample();
-                apiDefinitionExample.createCriteria().andIdIn(ids);
-                apiDefinitionMapper.updateByExampleSelective(apiDefinition, apiDefinitionExample);
+            ApiDefinition apiDefinition = new ApiDefinition();
+            BeanUtils.copyBean(apiDefinition, request);
+            apiDefinition.setUpdateUser(userId);
+            apiDefinition.setUpdateTime(System.currentTimeMillis());
+            ApiDefinitionExample apiDefinitionExample = new ApiDefinitionExample();
+            switch (request.getType()) {
+                case "tags" -> handleTags(request, userId, ids);
+                case "customs" -> detailCustoms(request, ids);
+                case "method" -> handleMethod(request, userId, ids, apiDefinition, apiDefinitionExample);
+                default -> {
+                    apiDefinitionExample.createCriteria().andIdIn(ids);
+                    apiDefinitionMapper.updateByExampleSelective(apiDefinition, apiDefinitionExample);
+                }
             }
             //发送通知
             apiDefinitionNoticeService.batchSendNotice(ids, userId, request.getProjectId(), NoticeConstants.Event.UPDATE);
         }
+    }
+
+    private void handleMethod(ApiDefinitionBatchUpdateRequest request, String userId, List<String> ids, ApiDefinition apiDefinition, ApiDefinitionExample apiDefinitionExample) {
+        apiDefinitionExample.createCriteria().andIdIn(ids).andProtocolEqualTo(ApiConstants.HTTP_PROTOCOL);
+        apiDefinitionMapper.updateByExampleSelective(apiDefinition, apiDefinitionExample);
+    }
+
+    private void detailCustoms(ApiDefinitionBatchUpdateRequest request, List<String> ids) {
+        // 自定义字段处理
+        ApiDefinitionCustomFieldDTO customField = request.getCustomField();
+        List<ApiDefinitionCustomField> list = new ArrayList<>();
+        ApiDefinitionCustomField apiDefinitionCustomField = new ApiDefinitionCustomField();
+        apiDefinitionCustomField.setFieldId(customField.getId());
+        apiDefinitionCustomField.setValue(customField.getValue());
+        list.add(apiDefinitionCustomField);
+        ApiDefinitionUpdateRequest apiDefinitionUpdateRequest = new ApiDefinitionUpdateRequest();
+        BeanUtils.copyBean(apiDefinitionUpdateRequest, request);
+        apiDefinitionUpdateRequest.setCustomFields(list);
+        ids.forEach(id -> {
+            apiDefinitionUpdateRequest.setId(id);
+            handleUpdateCustomFields(apiDefinitionUpdateRequest, request.getProjectId());
+        });
     }
 
 
@@ -866,8 +882,7 @@ public class ApiDefinitionService extends MoveNodeService {
     // 获取批量操作选中的ID
     public <T> List<String> getBatchApiIds(T dto, String projectId, List<String> protocols, boolean deleted, String userId) {
         TableBatchProcessDTO request = (TableBatchProcessDTO) dto;
-        if (request.isSelectAll()) {
-            // 全选
+        if (request.isSelectAll() && CollectionUtils.isNotEmpty(protocols)) {
             CustomFieldUtils.setBaseQueryRequestCustomMultipleFields(request.getCondition(), userId);
             List<String> ids = extApiDefinitionMapper.getIds(request, projectId, protocols, deleted);
             if (CollectionUtils.isNotEmpty(request.getExcludeIds())) {
@@ -875,6 +890,7 @@ public class ApiDefinitionService extends MoveNodeService {
             }
             return ids;
         } else {
+            request.getSelectIds().removeAll(request.getExcludeIds());
             return request.getSelectIds();
         }
     }

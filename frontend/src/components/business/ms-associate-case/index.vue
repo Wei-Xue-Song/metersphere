@@ -8,43 +8,126 @@
     unmount-on-close
   >
     <template #headerLeft>
-      <div class="float-left">
-        <a-select
-          v-model="innerProject"
-          class="ml-2 w-[240px]"
-          :default-value="innerProject"
-          allow-search
-          :placeholder="t('common.pleaseSelect')"
-        >
-          <template #arrow-icon>
-            <icon-caret-down />
-          </template>
-          <a-tooltip v-for="item of projectList" :key="item.id" :mouse-enter-delay="500" :content="item.name">
-            <a-option :value="item.id" :class="item.id === innerProject ? 'arco-select-option-selected' : ''">
-              {{ item.name }}
-            </a-option>
-          </a-tooltip>
-        </a-select>
+      <a-popconfirm
+        v-if="!getIsVisited()"
+        class="ms-pop-confirm--hidden-cancel change-project-pop"
+        position="br"
+        :popup-visible="selectPopVisible"
+        popup-container="#typeSelectGroupRef"
+        :ok-text="t('ms.case.associate.gotIt')"
+        @ok="okHandler"
+        @popup-visible-change="handlePopChange"
+      >
+        <div class="float-left">
+          <a-input-group>
+            <!-- TODO 这个版本不上 -->
+            <!-- <a-select
+              v-model="functionalType"
+              class="ml-2 w-[100px]"
+              :default-value="innerProject"
+              :placeholder="t('common.pleaseSelect')"
+            >
+              <template #arrow-icon>
+                <icon-caret-down />
+              </template>
+              <a-tooltip v-for="item of functionalList" :key="item.id" :mouse-enter-delay="500" :content="item.name">
+                <a-option :value="item.id" :class="item.id === innerProject ? 'arco-select-option-selected' : ''">
+                  {{ item.name }}
+                </a-option>
+              </a-tooltip>
+            </a-select> -->
+
+            <a-select
+              v-model="innerProject"
+              :popup-visible="selectVisible"
+              class="ml-2 w-[240px]"
+              :default-value="innerProject"
+              :placeholder="t('common.pleaseSelect')"
+              @popup-visible-change="changeProjectHandler"
+            >
+              <template #arrow-icon>
+                <icon-caret-down />
+              </template>
+              <a-tooltip v-for="item of projectList" :key="item.id" :mouse-enter-delay="500" :content="item.name">
+                <a-option :value="item.id" :class="item.id === innerProject ? 'arco-select-option-selected' : ''">
+                  {{ item.name }}
+                </a-option>
+              </a-tooltip>
+            </a-select>
+          </a-input-group>
+        </div>
+        <template #cancel-text>
+          <div> </div>
+        </template>
+        <template #icon>
+          <MsIcon class="text-[rgb(var(--primary-5))]" type="icon-icon_warning_filled" size="16" />
+        </template>
+        <template #content>
+          <div class="font-semibold text-[var(--color-text-1)]">
+            {{ t('ms.case.associate.switchProject') }}
+          </div>
+          <div class="mt-[8px] w-[215px] text-[12px] leading-[16px] text-[var(--color-text-2)]">
+            {{ t('ms.case.associate.switchProjectPopTip') }}
+          </div>
+        </template>
+      </a-popconfirm>
+      <div v-else class="float-left">
+        <a-input-group>
+          <!-- TODO 这个版本不上 -->
+          <!-- <a-select
+            v-model="functionalType"
+            class="ml-2 w-[100px]"
+            :default-value="innerProject"
+            allow-search
+            :placeholder="t('common.pleaseSelect')"
+          >
+            <template #arrow-icon>
+              <icon-caret-down />
+            </template>
+            <a-tooltip v-for="item of functionalList" :key="item.id" :mouse-enter-delay="500" :content="item.name">
+              <a-option :value="item.id" :class="item.id === innerProject ? 'arco-select-option-selected' : ''">
+                {{ item.name }}
+              </a-option>
+            </a-tooltip>
+          </a-select> -->
+
+          <a-select
+            id="typeRadioGroupRef"
+            v-model:model-value="innerProject"
+            :popup-visible="selectVisible"
+            class="ml-2 w-[240px]"
+            :default-value="innerProject"
+            allow-search
+            :placeholder="t('common.pleaseSelect')"
+            @popup-visible-change="changeProjectHandler"
+          >
+            <template #arrow-icon>
+              <icon-caret-down />
+            </template>
+            <a-tooltip v-for="item of projectList" :key="item.id" :mouse-enter-delay="500" :content="item.name">
+              <a-option :value="item.id" :class="item.id === innerProject ? 'arco-select-option-selected' : ''">
+                {{ item.name }}
+              </a-option>
+            </a-tooltip>
+          </a-select>
+        </a-input-group>
       </div>
     </template>
-    <MsTab
-      v-model:active-key="activeTab"
-      :show-badge="false"
-      :content-tab-list="contentTabList"
-      class="no-content relative border-b"
-    />
-    <div class="flex h-[calc(100vh-104px)]">
+    <div class="flex h-[calc(100vh-58px)]">
       <div class="w-[292px] border-r border-[var(--color-text-n8)] p-[16px]">
         <CaseTree
           ref="caseTreeRef"
+          v-model:selected-keys="selectedKeys"
           :modules-count="modulesCount"
-          :selected-keys="selectedKeys"
           :get-modules-api-type="props.getModulesApiType"
           :current-project="innerProject"
-          :active-tab="activeTab"
+          :active-tab="associationType"
           :extra-modules-params="props.extraModulesParams"
+          :show-type="showType"
+          :folder-name="folderName"
           @folder-node-select="handleFolderNodeSelect"
           @init="initModuleTree"
+          @change-protocol="handleProtocolChange"
         />
       </div>
       <div class="flex w-[calc(100%-293px)] flex-col p-[16px]">
@@ -53,32 +136,38 @@
           :filter-config-list="[]"
           :custom-fields-config-list="[]"
           :row-count="0"
-          :search-placeholder="t('ms.case.associate.searchPlaceholder')"
+          :search-placeholder="t('common.searchByIdName')"
           @keyword-search="loadCaseList"
           @adv-search="loadCaseList"
           @refresh="loadCaseList"
         >
           <template #left>
             <div class="flex w-full items-center justify-between">
-              <a-radio-group v-if="activeTab === 'API'" v-model="showType" type="button" class="file-show-type mr-2">
+              <a-radio-group
+                v-if="associationType === 'API'"
+                v-model="showType"
+                type="button"
+                class="file-show-type mr-2"
+              >
                 <a-radio value="API" class="show-type-icon p-[2px]">API</a-radio>
                 <a-radio value="CASE" class="show-type-icon p-[2px]">CASE</a-radio>
               </a-radio-group>
               <a-popover v-else title="" position="bottom">
                 <div class="flex">
                   <div class="one-line-text mr-1 max-h-[32px] max-w-[300px] text-[var(--color-text-1)]">
-                    {{ activeFolderName }}
+                    {{ activeFolderName || folderName }}
                   </div>
                   <span class="text-[var(--color-text-4)]"> ({{ modulesCount[activeFolder] || 0 }})</span>
                 </div>
                 <template #content>
                   <div class="max-w-[400px] text-[14px] font-medium text-[var(--color-text-1)]">
-                    {{ activeFolderName }}
+                    {{ activeFolderName || folderName }}
                     <span class="text-[var(--color-text-4)]">({{ modulesCount[activeFolder] || 0 }})</span>
                   </div>
                 </template>
               </a-popover>
-              <a-checkbox v-if="activeTab === 'FUNCTIONAL'" v-model="isAddAssociatedCase">
+              <!-- TODO 正式版暂时不上了 -->
+              <!-- <a-checkbox v-if="associationType === 'FUNCTIONAL'" v-model="isAddAssociatedCase">
                 <div class="flex items-center">
                   {{ t('ms.case.associate.addAssociatedCase') }}
                   <a-tooltip position="top" :content="t('ms.case.associate.automaticallyAddApiCase')">
@@ -88,29 +177,32 @@
                     />
                   </a-tooltip>
                 </div>
-              </a-checkbox>
+              </a-checkbox> -->
             </div>
           </template>
         </MsAdvanceFilter>
         <!-- 功能用例 -->
         <CaseTable
-          v-if="activeTab === CaseLinkEnum.FUNCTIONAL"
+          v-if="associationType === CaseLinkEnum.FUNCTIONAL"
           ref="functionalTableRef"
+          v-model:selectedIds="selectedIds"
           :association-type="associateType"
           :get-page-api-type="getPageApiType"
           :active-module="activeFolder"
           :offspring-ids="offspringIds"
           :current-project="innerProject"
           :associated-ids="props.associatedIds"
-          :active-source-type="activeTab"
+          :active-source-type="associationType"
           :extra-table-params="props.extraTableParams"
           :keyword="keyword"
           @get-module-count="initModulesCount"
+          @refresh="loadCaseList"
         />
         <!-- 接口用例 API -->
         <ApiTable
-          v-if="activeTab === CaseLinkEnum.API && showType === 'API'"
+          v-if="associationType === CaseLinkEnum.API && showType === 'API'"
           ref="apiTableRef"
+          v-model:selectedIds="selectedIds"
           :get-page-api-type="getPageApiType"
           :extra-table-params="props.extraTableParams"
           :association-type="associateType"
@@ -118,15 +210,17 @@
           :offspring-ids="offspringIds"
           :current-project="innerProject"
           :associated-ids="props.associatedIds"
-          :active-source-type="activeTab"
+          :active-source-type="associationType"
           :keyword="keyword"
           :show-type="showType"
+          :protocols="selectedProtocols"
           @get-module-count="initModulesCount"
         />
         <!-- 接口用例 CASE -->
         <ApiCaseTable
-          v-if="activeTab === CaseLinkEnum.API && showType === 'CASE'"
+          v-if="associationType === CaseLinkEnum.API && showType === 'CASE'"
           ref="caseTableRef"
+          v-model:selectedIds="selectedIds"
           :get-page-api-type="getPageApiType"
           :extra-table-params="props.extraTableParams"
           :association-type="associateType"
@@ -134,74 +228,46 @@
           :offspring-ids="offspringIds"
           :current-project="innerProject"
           :associated-ids="props.associatedIds"
-          :active-source-type="activeTab"
+          :active-source-type="associationType"
           :keyword="keyword"
           :show-type="showType"
+          :protocols="selectedProtocols"
           @get-module-count="initModulesCount"
         />
         <!-- 接口场景用例 -->
         <ScenarioCaseTable
-          v-if="activeTab === CaseLinkEnum.SCENARIO"
+          v-if="associationType === CaseLinkEnum.SCENARIO"
           ref="scenarioTableRef"
+          v-model:selectedIds="selectedIds"
           :association-type="associateType"
           :modules-count="modulesCount"
           :active-module="activeFolder"
           :offspring-ids="offspringIds"
           :current-project="innerProject"
           :associated-ids="props.associatedIds"
-          :active-source-type="activeTab"
+          :active-source-type="associationType"
+          :get-page-api-type="getPageApiType"
+          :extra-table-params="props.extraTableParams"
           :keyword="keyword"
           @get-module-count="initModulesCount"
+          @refresh="loadCaseList"
         />
 
         <div class="footer">
           <div class="flex flex-1 items-center">
-            <slot name="footerLeft">
-              <a-form ref="formRef" :model="form" layout="vertical" class="mb-0 max-w-[260px]">
-                <a-form-item
-                  field="name"
-                  hide-label
-                  class="test-set-form-item"
-                  :rules="[{ required: true, message: t('project.commonScript.publicScriptNameNotEmpty') }]"
-                >
-                  <a-input-group class="w-full">
-                    <div class="test-set h-[32px] w-[80px]">{{ t('ms.case.associate.testSet') }}</div>
-                    <a-select
-                      v-model="form.testMap"
-                      class="max-w-[260px]"
-                      :default-value="innerProject"
-                      allow-search
-                      :placeholder="t('common.pleaseSelect')"
-                    >
-                      <template #arrow-icon>
-                        <icon-caret-down />
-                      </template>
-
-                      <a-tooltip
-                        v-for="item of testList"
-                        :key="item.value"
-                        :mouse-enter-delay="500"
-                        :content="item.name"
-                      >
-                        <a-option
-                          :value="item.value"
-                          :class="item.value === form.testMap ? 'arco-select-option-selected' : ''"
-                        >
-                          {{ item.label }}
-                        </a-option>
-                      </a-tooltip>
-                    </a-select>
-                  </a-input-group>
-                </a-form-item>
-              </a-form>
-            </slot>
+            <slot name="footerLeft"></slot>
           </div>
           <div class="flex items-center">
             <slot name="footerRight">
               <a-button type="secondary" :disabled="props.confirmLoading" class="mr-[12px]" @click="cancel">
                 {{ t('common.cancel') }}
               </a-button>
-              <a-button :loading="props.confirmLoading" type="primary" @click="handleConfirm">
+              <a-button
+                :loading="props.confirmLoading"
+                type="primary"
+                :disabled="!selectedIds.length"
+                @click="handleConfirm"
+              >
                 {{ t('ms.case.associate.associate') }}
               </a-button>
             </slot>
@@ -215,19 +281,18 @@
 <script setup lang="ts">
   import { ref } from 'vue';
   import { useVModel } from '@vueuse/core';
-  import { FormInstance, Message, SelectOptionData, ValidatedError } from '@arco-design/web-vue';
 
   import { MsAdvanceFilter } from '@/components/pure/ms-advance-filter';
   import MsDrawer from '@/components/pure/ms-drawer/index.vue';
-  import MsTab from '@/components/pure/ms-tab/index.vue';
   import ApiCaseTable from './apiCaseTable.vue';
   import ApiTable from './apiTable.vue';
   import CaseTable from './caseTable.vue';
   import CaseTree from './caseTree.vue';
   import ScenarioCaseTable from './scenarioCaseTable.vue';
 
-  import { getAssociatedProjectOptions, getCustomFieldsTable } from '@/api/modules/case-management/featureCase';
+  import { getAssociatedProjectOptions } from '@/api/modules/case-management/featureCase';
   import { useI18n } from '@/hooks/useI18n';
+  import useVisit from '@/hooks/useVisit';
   import useAppStore from '@/store/modules/app';
 
   import type { ModuleTreeNode, TableQueryParams } from '@/models/common';
@@ -236,6 +301,10 @@
   import { CaseLinkEnum } from '@/enums/caseEnum';
 
   import { initGetModuleCountFunc } from './utils/moduleCount';
+
+  const visitedKey = 'changeLinkProject';
+
+  const { addVisited, getIsVisited } = useVisit(visitedKey);
 
   const appStore = useAppStore();
   const { t } = useI18n();
@@ -254,7 +323,9 @@
     confirmLoading?: boolean;
     associatedIds?: string[]; // 已关联用例id集合用于去重已关联
     hideProjectSelect?: boolean; // 是否隐藏项目选择
+    associatedType: keyof typeof CaseLinkEnum; // 关联类型
   }>();
+
   const emit = defineEmits<{
     (e: 'update:visible', val: boolean): void;
     (e: 'update:projectId', val: string): void;
@@ -264,50 +335,45 @@
     (e: 'save', params: any): void; // 保存对外传递关联table 相关参数
   }>();
 
-  const projectList = ref<ProjectListItem[]>([]);
   const keyword = ref<string>('');
+
+  const projectList = ref<ProjectListItem[]>([]);
   const innerProject = useVModel(props, 'projectId', emit);
+
   const showType = ref('API');
   const innerVisible = useVModel(props, 'visible', emit);
 
   const associateType = ref<string>('project');
 
   const modulesCount = ref<Record<string, any>>({});
+  const associationType = ref<keyof typeof CaseLinkEnum>('FUNCTIONAL');
 
-  const activeTab = ref<keyof typeof CaseLinkEnum>(CaseLinkEnum.FUNCTIONAL);
-  const form = ref({
-    type: t('ms.case.associate.testSet'),
-    testMap: '',
-  });
-
-  const testList = ref<SelectOptionData>([]);
-
-  const contentTabList = [
-    {
-      value: CaseLinkEnum.FUNCTIONAL,
-      label: t('ms.case.associate.functionalCase'),
-    },
-    {
-      value: CaseLinkEnum.API,
-      label: t('ms.case.associate.apiCase'),
-    },
-    {
-      value: CaseLinkEnum.SCENARIO,
-      label: t('ms.case.associate.apiScenarioCase'),
-    },
-  ];
   const activeFolder = ref('all');
-  const activeFolderName = ref(t('ms.case.associate.allCase'));
+  const selectedIds = ref<string[]>([]);
 
   const selectedKeys = computed({
     get: () => [activeFolder.value],
     set: (val) => val,
   });
 
+  const folderName = computed(() => {
+    switch (associationType.value) {
+      case CaseLinkEnum.FUNCTIONAL:
+        return t('caseManagement.caseReview.allCases');
+      case CaseLinkEnum.API:
+        return t('apiTestManagement.allApi');
+      case CaseLinkEnum.SCENARIO:
+        return t('apiScenario.allScenario');
+      default:
+        return '';
+    }
+  });
+
   /**
    * 处理模块树节点选中事件
    */
   const offspringIds = ref<string[]>([]);
+  const activeFolderName = ref('');
 
   function handleFolderNodeSelect(ids: string[], _offspringIds: string[], name?: string) {
     [activeFolder.value] = ids;
@@ -315,21 +381,13 @@
     activeFolderName.value = name ?? '';
   }
 
-  const moduleTree = ref<ModuleTreeNode[]>([]);
-
-  function initModuleTree(tree: ModuleTreeNode[]) {
-    moduleTree.value = unref(tree);
-  }
-
-  const isAddAssociatedCase = ref<boolean>(false);
-  const formRef = ref<FormInstance | null>(null);
   const functionalTableRef = ref<InstanceType<typeof CaseTable>>();
   const apiTableRef = ref<InstanceType<typeof ApiTable>>();
   const caseTableRef = ref<InstanceType<typeof ApiCaseTable>>();
   const scenarioTableRef = ref<InstanceType<typeof ScenarioCaseTable>>();
 
   function makeParams() {
-    switch (activeTab.value) {
+    switch (props.associatedType) {
       case CaseLinkEnum.FUNCTIONAL:
         return functionalTableRef.value?.getFunctionalSaveParams();
       case CaseLinkEnum.API:
@@ -348,12 +406,6 @@
     if (!params?.selectIds.length) {
       return;
     }
-    formRef.value?.validate(async (errors: undefined | Record<string, ValidatedError>) => {
-      if (!errors) {
-        // emit('save', params);
-      }
-    });
-    // TODO: 待联调 先不加测试集允许关联
     emit('save', params);
   }
 
@@ -362,14 +414,17 @@
     keyword.value = '';
     activeFolder.value = 'all';
     activeFolderName.value = t('ms.case.associate.allCase');
-    formRef.value?.resetFields();
     emit('close');
   }
 
-  async function initProjectList(setDefault: boolean) {
+  async function initProjectList() {
     try {
-      projectList.value = await getAssociatedProjectOptions(appStore.currentOrgId, activeTab.value);
-      if (setDefault) {
+      projectList.value = await getAssociatedProjectOptions(appStore.currentOrgId, associationType.value);
+      const hasProjectPermission = projectList.value.map((item) => item.id).includes(appStore.currentProjectId);
+      // 如果项目模块未开启则不选中它该项目
+      if (hasProjectPermission) {
+        innerProject.value = appStore.currentProjectId;
+      } else {
         innerProject.value = projectList.value[0].id;
       }
     } catch (error) {
@@ -377,12 +432,13 @@
       console.log(error);
     }
   }
-
+  const selectedProtocols = ref<string[]>([]);
   async function initModulesCount(params: TableQueryParams) {
     try {
-      modulesCount.value = await initGetModuleCountFunc(props.getModuleCountApiType, activeTab.value, {
+      modulesCount.value = await initGetModuleCountFunc(props.getModuleCountApiType, associationType.value, {
         ...params,
         ...props.extraModuleCountParams,
+        protocols: associationType.value === CaseLinkEnum.API ? selectedProtocols.value : undefined,
       });
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -390,39 +446,14 @@
     }
   }
 
-  watch(
-    () => activeTab.value,
-    (val) => {
-      if (val) {
-        showType.value = 'API';
-        activeFolder.value = 'all';
-        initProjectList(true);
-      }
-    }
-  );
-
-  watch(
-    () => props.visible,
-    (val) => {
-      if (val) {
-        initProjectList(false);
-        innerProject.value = appStore.currentProjectId;
-      }
-      activeTab.value = CaseLinkEnum.FUNCTIONAL;
-    }
-  );
-
-  watch(
-    () => innerProject.value,
-    (val) => {
-      if (val) {
-        activeFolder.value = 'all';
-      }
-    }
-  );
+  const selectVisible = ref<boolean>(false);
+  const selectPopVisible = ref<boolean>(false);
 
   function loadCaseList() {
-    switch (activeTab.value) {
+    if (props.associatedIds && props.associatedIds.length > 0) {
+      selectedIds.value = props.associatedIds;
+    }
+    switch (associationType.value) {
       case CaseLinkEnum.FUNCTIONAL:
         return functionalTableRef.value?.loadCaseList();
       case CaseLinkEnum.API:
@@ -433,6 +464,71 @@
         break;
     }
   }
+
+  const moduleTree = ref<ModuleTreeNode[]>([]);
+  function initModuleTree(tree: ModuleTreeNode[], _protocols?: string[]) {
+    moduleTree.value = unref(tree);
+    selectedProtocols.value = _protocols || [];
+    if (props.associatedType === CaseLinkEnum.API) {
+      loadCaseList();
+    }
+  }
+
+  const functionalType = ref('project');
+  const functionalList = ref([
+    {
+      id: 'project',
+      name: t('ms.case.associate.project'),
+    },
+  ]);
+
+  function changeProjectHandler(visible: boolean) {
+    if (visible && !getIsVisited()) {
+      selectPopVisible.value = true;
+    } else {
+      selectPopVisible.value = false;
+      selectVisible.value = visible;
+    }
+  }
+
+  function handlePopChange(visible: boolean) {
+    if (visible) {
+      selectPopVisible.value = false;
+    }
+  }
+
+  function okHandler() {
+    addVisited();
+    selectPopVisible.value = false;
+    selectVisible.value = true;
+  }
+
+  function handleProtocolChange(val: string[]) {
+    selectedProtocols.value = val;
+  }
+
+  watch(
+    () => props.visible,
+    (val) => {
+      if (val) {
+        associationType.value = props.associatedType;
+        activeFolder.value = 'all';
+        initProjectList();
+      }
+      selectPopVisible.value = false;
+      keyword.value = '';
+      selectedIds.value = [];
+    }
+  );
+
+  watch(
+    () => showType.value,
+    (val) => {
+      if (val) {
+        selectedIds.value = [];
+      }
+    }
+  );
 </script>
 
 <style scoped lang="less">
@@ -492,6 +588,17 @@
       border: 1px solid var(--color-text-n8);
       border-right: none;
       @apply flex items-center justify-center;
+    }
+  }
+</style>
+
+<style lang="less">
+  .change-project-pop {
+    .arco-trigger-popup-wrapper {
+      .arco-popconfirm-popup-content {
+        width: 215px !important;
+        border: none;
+      }
     }
   }
 </style>

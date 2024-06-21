@@ -233,7 +233,7 @@ export function traverseTree<T>(
  */
 export function mapTree<T>(
   tree: TreeNode<T> | TreeNode<T>[] | T | T[],
-  customNodeFn: (node: TreeNode<T>, path: string) => TreeNode<T> | null = (node) => node,
+  customNodeFn: (node: TreeNode<T>, path: string, _level: number) => TreeNode<T> | null = (node) => node,
   customChildrenKey = 'children',
   parentPath = '',
   level = 0,
@@ -258,7 +258,7 @@ export function mapTree<T>(
         const fullPath = node.path ? `${_parentPath}/${node.path}`.replace(/\/+/g, '/') : '';
         node.sort = i + 1; // sort 从 1 开始
         node.parent = _parent || undefined; // 没有父节点说明是树的第一层
-        const newNode = typeof customNodeFn === 'function' ? customNodeFn(node, fullPath) : node;
+        const newNode = typeof customNodeFn === 'function' ? customNodeFn(node, fullPath, _level) : node;
         if (newNode) {
           newNode.level = _level;
           if (newNode[customChildrenKey] && newNode[customChildrenKey].length > 0) {
@@ -315,16 +315,17 @@ export function filterTree<T>(
 export function findNodeByKey<T>(
   trees: TreeNode<T>[],
   targetKey: string | number,
-  customKey = 'key'
+  customKey = 'key',
+  dataKey: string | undefined = undefined
 ): TreeNode<T> | T | null {
   for (let i = 0; i < trees.length; i++) {
     const node = trees[i];
-    if (node[customKey] === targetKey) {
+    if (dataKey ? node[dataKey]?.[customKey] === targetKey : node[customKey] === targetKey) {
       return node; // 如果当前节点的 key 与目标 key 匹配，则返回当前节点
     }
 
     if (Array.isArray(node.children) && node.children.length > 0) {
-      const _node = findNodeByKey(node.children, targetKey, customKey); // 递归在子节点中查找
+      const _node = findNodeByKey(node.children, targetKey, customKey, dataKey); // 递归在子节点中查找
       if (_node) {
         return _node; // 如果在子节点中找到了匹配的节点，则返回该节点
       }
@@ -389,6 +390,34 @@ export function findNodePathByKey<T>(
 
   return null;
 }
+
+/**
+ * 根据customKey替换树节点
+ */
+export function replaceNodeInTree<T>(
+  tree: TreeNode<T>[],
+  targetKey: string,
+  newNode: TreeNode<T>,
+  dataKey?: string,
+  customKey = 'key'
+): boolean {
+  for (let i = 0; i < tree.length; i++) {
+    const node = tree[i];
+    if (dataKey ? node[dataKey]?.[customKey] === targetKey : node[customKey] === targetKey) {
+      // 找到目标节点，进行替换
+      tree[i] = newNode;
+      return true;
+    }
+    if (node.children && node.children.length > 0) {
+      // 如果当前节点有子节点，递归查找
+      if (replaceNodeInTree(node.children, targetKey, newNode, dataKey, customKey)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * 在某个节点前/后插入单个新节点
  * @param treeArr 目标树
@@ -551,6 +580,7 @@ export function deleteNodes<T>(
   treeArr: TreeNode<T>[],
   targetKeys: (string | number)[],
   deleteCondition?: (node: TreeNode<T>, parent?: TreeNode<T>) => boolean,
+  deleteCallBack?: (node: TreeNode<T>) => void,
   customKey = 'key'
 ): boolean {
   let hasDeleted = false;
@@ -560,6 +590,9 @@ export function deleteNodes<T>(
       const node = tree[i];
       if (targetKeysSet.has(node[customKey])) {
         if (deleteCondition && deleteCondition(node, node.parent)) {
+          if (deleteCallBack) {
+            deleteCallBack(node);
+          }
           tree.splice(i, 1); // 直接删除当前节点
           hasDeleted = true;
           targetKeysSet.delete(node[customKey]); // 删除后从集合中移除

@@ -28,7 +28,7 @@
   const initActive = async () => {
     const data = await getDingInfo();
     await load(true);
-    const url = encodeURIComponent(data.callBack ? data.callBack : '');
+    const url = encodeURIComponent(window.location.origin);
     window.DTFrameLogin(
       {
         id: 'ding-talk-qr',
@@ -45,8 +45,6 @@
       },
       async (loginResult) => {
         const { redirectUrl, authCode, state } = loginResult;
-        console.log('authCode');
-        console.log(authCode);
         const dingCallback = getDingCallback(authCode);
         userStore.qrCodeLogin(await dingCallback);
         Message.success(t('login.form.login.success'));
@@ -75,9 +73,9 @@
           },
         });
         // 也可以在不跳转页面的情况下，使用code进行授权
-        console.log(authCode);
       },
       (errorMsg) => {
+        Message.error(`errorMsg of errorCbk: ${errorMsg}`);
         // 这里一般需要展示登录失败的具体原因,可以使用toast等轻提示
         console.error(`errorMsg of errorCbk: ${errorMsg}`);
       }

@@ -62,6 +62,8 @@ export const DisassociateCaseUrl = '/test-plan/functional/case/disassociate';
 export const BatchDisassociateCaseUrl = '/test-plan/functional/case/batch/disassociate';
 // 计划详情-功能用例-执行
 export const RunFeatureCaseUrl = '/test-plan/functional/case/run';
+// 计划详情-功能用例列表-批量移动
+export const BatchMoveFeatureCaseUrl = '/test-plan/functional/case/batch/move';
 // 测试计划-用例详情-缺陷列表
 export const GetAssociatedBugUrl = '/test-plan/functional/case/has/associate/bug/page';
 // 测试计划-用例详情
@@ -78,12 +80,14 @@ export const GetTestPlanUsersUrl = '/test-plan/functional/case/user-option';
 export const BatchUpdateCaseExecutorUrl = '/test-plan/functional/case/batch/update/executor';
 // 计划详情-功能用例-执行历史
 export const ExecuteHistoryUrl = '/test-plan/functional/case/exec/history';
-// 计划详情-执行历史 TODO 联调
-export const PlanDetailExecuteHistoryUrl = '/api/scenario/execute/page';
+// 计划详情-执行历史
+export const PlanDetailExecuteHistoryUrl = '/test-plan/his/page';
 // 功能用例-关联用例-接口用例-API
 export const TestPlanApiAssociatedPageUrl = '/test-plan/association/api/page';
 // 功能用例-关联用例-接口用例-CASE
 export const TestPlanCaseAssociatedPageUrl = '/test-plan/association/api/case/page';
+// 功能用例-关联用例-接口用例-CASE
+export const TestPlanScenarioAssociatedPageUrl = '/test-plan/association/api/scenario/page';
 // 测试计划-复制
 export const TestPlanAndGroupCopyUrl = '/test-plan/copy';
 // 测试计划-计划组下拉
@@ -92,7 +96,60 @@ export const TestPlanGroupOptionsUrl = 'test-plan/group-list';
 export const dragPlanOnGroupUrl = '/test-plan/sort';
 // 测试计划-创建定时任务
 export const ConfigScheduleUrl = '/test-plan/schedule-config';
+// 测试计划-计划&计划组-执行
+export const ExecuteSinglePlanUrl = '/test-plan-execute/single';
 // 测试计划-计划&计划组-执行&批量执行
-export const ExecutePlanUrl = '/test-plan-execute/start';
+export const BatchExecutePlanUrl = '/test-plan-execute/batch';
 // 测试计划-删除定时任务
 export const DeleteScheduleTaskUrl = 'test-plan/schedule-config-delete';
+
+// 计划详情-接口用例列表
+export const GetPlanDetailApiCaseListUrl = '/test-plan/api/case/page';
+// 计划详情-接口用例模块树
+export const GetApiCaseModuleUrl = '/test-plan/api/case/tree';
+// 计划详情-接口用例-获取模块数量
+export const GetApiCaseModuleCountUrl = '/test-plan/api/case/module/count';
+// 计划详情-接口用例列表-拖拽排序
+export const SortApiCaseUrl = '/test-plan/api/case/sort';
+// 计划详情-接口用例列表-执行
+export const RunApiCaseUrl = '/test-plan/api/case/run';
+// 计划详情-接口用例列表-取消关联用例
+export const DisassociateApiCaseUrl = '/test-plan/api/case/disassociate';
+// 计划详情-接口用例列表-批量取消关联用例
+export const BatchDisassociateApiCaseUrl = '/test-plan/api/case/batch/disassociate';
+// 计划详情-接口用例列表-批量执行
+export const BatchRunApiCaseUrl = '/test-plan/api/case/batch/run';
+// 计划详情-接口用例列表-批量移动
+export const BatchMoveApiCaseUrl = '/test-plan/api/case/batch/move';
+// 计划详情-接口用例列表-报告详情
+export const ApiCaseReportDetailUrl = '/test-plan/api/case/report/get';
+// 计划详情-接口用例列表-步骤详情
+export const ApiCaseReportDetailStepUrl = '/test-plan/api/case/report/get/detail';
+
+// 计划详情-接口场景列表
+export const GetPlanDetailApiScenarioListUrl = '/test-plan/api/scenario/page';
+// 计划详情-接口场景模块树
+export const GetApiScenarioModuleUrl = '/test-plan/api/scenario/tree';
+// 计划详情-接口场景-获取模块数量
+export const GetApiScenarioModuleCountUrl = '/test-plan/api/scenario/module/count';
+// 计划详情-接口场景列表-拖拽排序
+export const SortApiScenarioUrl = '/test-plan/api/scenario/sort';
+// 计划详情-接口场景列表-执行
+export const RunApiScenarioUrl = '/test-plan/api/scenario/run';
+// 计划详情-接口场景列表-取消关联用例
+export const DisassociateApiScenarioUrl = '/test-plan/api/scenario/disassociate';
+// 计划详情-接口场景列表-批量取消关联用例
+export const BatchDisassociateApiScenarioUrl = '/test-plan/api/scenario/batch/disassociate';
+// 计划详情-接口场景列表-批量执行
+export const BatchRunApiScenarioUrl = '/test-plan/api/scenario/batch/run';
+// 计划详情-接口场景列表-批量移动
+export const BatchMoveApiScenarioUrl = '/test-plan/api/scenario/batch/move';
+// 计划详情-接口场景列表-报告详情
+export const ApiScenarioReportDetailUrl = '/test-plan/api/scenario/report/get';
+// 计划详情-接口场景列表-步骤详情
+export const ApiScenarioReportDetailStepUrl = '/test-plan/api/scenario/report/get/detail';
+
+// 测试规划脑图
+export const GetPlanMinderUrl = '/test-plan/mind/data';
+// 修改测试规划脑图
+export const EditPlanMinderUrl = '/test-plan/mind/data/edit';

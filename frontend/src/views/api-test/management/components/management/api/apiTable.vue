@@ -31,7 +31,7 @@
       @drag-change="handleTableDragSort"
       @module-change="loadApiList(false)"
     >
-      <template v-if="props.protocol === 'HTTP'" #[FilterSlotNameEnum.API_TEST_API_REQUEST_METHODS]="{ filterContent }">
+      <template #[FilterSlotNameEnum.API_TEST_API_REQUEST_METHODS]="{ filterContent }">
         <apiMethodName :method="filterContent.value" />
       </template>
       <template #[FilterSlotNameEnum.API_TEST_API_REQUEST_API_STATUS]="{ filterContent }">
@@ -40,22 +40,11 @@
       <template #num="{ record }">
         <MsButton type="text" @click="openApiTab(record)">{{ record.num }}</MsButton>
       </template>
+      <template #protocol="{ record }">
+        <apiMethodName :method="record.protocol" />
+      </template>
       <template #method="{ record }">
-        <a-select
-          v-if="props.protocol === 'HTTP' && hasAnyPermission(['PROJECT_API_DEFINITION:READ+UPDATE'])"
-          v-model:model-value="record.method"
-          class="param-input w-full"
-          size="mini"
-          @change="() => handleMethodChange(record)"
-        >
-          <template #label>
-            <apiMethodName :method="record.method" is-tag />
-          </template>
-          <a-option v-for="item of Object.values(RequestMethods)" :key="item" :value="item">
-            <apiMethodName :method="item" is-tag />
-          </a-option>
-        </a-select>
-        <apiMethodName v-else :method="record.method" is-tag />
+        <apiMethodName :method="record.method" is-tag />
       </template>
       <template #caseTotal="{ record }">
         {{ record.caseTotal }}
@@ -145,6 +134,7 @@
         :rules="[{ required: true, message: t('apiTestManagement.attrRequired') }]"
         asterisk-position="end"
       >
+        <template v-if="batchForm.attr === 'method'" #extra>{{ t('apiTestManagement.requestTypeTip') }}</template>
         <a-select v-model="batchForm.attr" :placeholder="t('common.pleaseSelect')">
           <a-option v-for="item of attrOptions" :key="item.value" :value="item.value">
             {{ t(item.name) }}
@@ -254,6 +244,7 @@
     </template>
     <moduleTree
       v-if="moveModalVisible"
+      ref="moveModuleTreeRef"
       :is-expand-all="true"
       :is-modal="true"
       :active-module="props.activeModule"
@@ -279,6 +270,7 @@
   import apiStatus from '@/views/api-test/components/apiStatus.vue';
   import moduleTree from '@/views/api-test/management/components/moduleTree.vue';
 
+  import { getProtocolList } from '@/api/modules/api-test/common';
   import {
     batchDeleteDefinition,
     batchMoveDefinition,
@@ -295,6 +287,7 @@
   import { characterLimit, operationWidth } from '@/utils';
   import { hasAnyPermission } from '@/utils/permission';
 
+  import { ProtocolItem } from '@/models/apiTest/common';
   import { ApiDefinitionDetail, ApiDefinitionGetModuleParams } from '@/models/apiTest/management';
   import { DragSortParams } from '@/models/common';
   import { RequestDefinitionStatus, RequestMethods } from '@/enums/apiEnum';
@@ -305,7 +298,7 @@
     class?: string;
     activeModule: string;
     offspringIds: string[];
-    protocol: string; // 查看的协议类型
+    selectedProtocols: string[]; // 查看的协议类型
     readOnly?: boolean; // 是否是只读模式
     refreshTimeStamp?: number;
     memberOptions: { label: string; value: string }[];
@@ -341,13 +334,38 @@
     ])
   );
 
+  // TODO: 后期优化 放store里
+  const protocolList = ref<ProtocolItem[]>([]);
+  async function initProtocolList() {
+    try {
+      const res = await getProtocolList(appStore.currentOrgId);
+      protocolList.value = res.map((e) => ({
+        protocol: e.protocol,
+        polymorphicName: e.polymorphicName,
+        pluginId: e.pluginId,
+      }));
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.log(error);
+    }
+  }
+
   const requestMethodsOptions = computed(() => {
-    return Object.values(RequestMethods).map((e) => {
+    const otherMethods = protocolList.value
+      .filter((e) => e.protocol !== 'HTTP')
+      .map((item) => {
+        return {
+          value: item.protocol,
+          key: item.protocol,
+        };
+      });
+    const httpMethods = Object.values(RequestMethods).map((e) => {
       return {
         value: e,
         key: e,
       };
     });
+    return [...httpMethods, ...otherMethods];
   });
   const requestApiStatus = computed(() => {
     return Object.values(RequestDefinitionStatus).map((e) => {
@@ -386,8 +404,9 @@
     {
       title: 'apiTestManagement.protocol',
       dataIndex: 'protocol',
+      slotName: 'protocol',
       showTooltip: true,
-      width: 200,
+      width: 150,
       showDrag: true,
     },
     {
@@ -397,7 +416,7 @@
       width: 140,
       showDrag: true,
       filterConfig: {
-        options: requestMethodsOptions.value,
+        options: [],
         filterSlotName: FilterSlotNameEnum.API_TEST_API_REQUEST_METHODS,
       },
     },
@@ -494,7 +513,7 @@
           ...item,
           filterConfig: {
             ...item.filterConfig,
-            options: props.protocol === 'HTTP' ? requestMethodsOptions.value : [],
+            options: requestMethodsOptions.value,
           },
         };
       }
@@ -588,7 +607,7 @@
       keyword: keyword.value,
       projectId: appStore.currentProjectId,
       moduleIds,
-      protocol: props.protocol,
+      protocols: props.selectedProtocols,
       filter: propsRes.value.filter,
     };
 
@@ -597,7 +616,7 @@
         keyword: keyword.value,
         filter: propsRes.value.filter,
         moduleIds: [],
-        protocol: props.protocol,
+        protocols: props.selectedProtocols,
         projectId: appStore.currentProjectId,
       });
     }
@@ -624,25 +643,12 @@
   );
 
   watch(
-    () => props.protocol,
+    () => props.selectedProtocols,
     () => {
       resetSelector();
       loadApiList(true);
     }
   );
-
-  async function handleMethodChange(record: ApiDefinitionDetail) {
-    try {
-      await updateDefinition({
-        id: record.id,
-        method: record.method,
-      });
-      Message.success(t('common.updateSuccess'));
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.log(error);
-    }
-  }
 
   async function handleStatusChange(record: ApiDefinitionDetail) {
     try {
@@ -658,6 +664,7 @@
   }
 
   onBeforeMount(() => {
+    initProtocolList();
     loadApiList(true);
   });
 
@@ -705,7 +712,7 @@
               projectId: appStore.currentProjectId,
               moduleIds: await getModuleIds(),
               deleteAll: true,
-              protocol: props.protocol,
+              protocols: props.selectedProtocols,
             });
           } else {
             await deleteDefinition(record?.id as string);
@@ -770,10 +777,11 @@
     },
   ];
   const attrOptions = computed(() => {
-    if (props.protocol === 'HTTP') {
-      return fullAttrs;
-    }
-    return fullAttrs.filter((e) => e.value !== 'method');
+    // TODO 协议 选择的数据不包含HTTP协议，则选择属性中不展示“请求类型“
+    // if (props.protocol === 'HTTP') {
+    return fullAttrs;
+    // }
+    // return fullAttrs.filter((e) => e.value !== 'method');
   });
   const valueOptions = computed(() => {
     switch (batchForm.value.attr) {
@@ -827,7 +835,7 @@
             },
             projectId: appStore.currentProjectId,
             moduleIds: await getModuleIds(),
-            protocol: props.protocol,
+            protocols: props.selectedProtocols,
             type: batchForm.value.attr,
             append: batchForm.value.append,
             [batchForm.value.attr]: batchForm.value.attr === 'tags' ? batchForm.value.values : batchForm.value.value,
@@ -846,6 +854,7 @@
     });
   }
 
+  const moveModuleTreeRef = ref<InstanceType<typeof moduleTree>>();
   const moveModalVisible = ref(false);
   const selectedModuleKeys = ref<(string | number)[]>([]); // 移动文件选中节点
   const isBatchMove = ref(false); // 是否批量移动文件
@@ -869,7 +878,7 @@
         projectId: appStore.currentProjectId,
         moduleIds: await getModuleIds(),
         moduleId: selectedModuleKeys.value[0],
-        protocol: props.protocol,
+        protocols: props.selectedProtocols,
       });
       Message.success(t('common.batchMoveSuccess'));
       if (isBatchMove.value) {
@@ -921,6 +930,9 @@
       case 'move':
         isBatchMove.value = true;
         moveModalVisible.value = true;
+        nextTick(() => {
+          moveModuleTreeRef.value?.refresh();
+        });
         break;
       default:
         break;
@@ -958,12 +970,10 @@
 
   const apiTableRef = ref();
   watch(
-    () => props.protocol,
-    (val) => {
-      if (val) {
-        initFilterColumn();
-        apiTableRef.value.initColumn(columns);
-      }
+    () => requestMethodsOptions.value,
+    () => {
+      initFilterColumn();
+      apiTableRef.value.initColumn(columns);
     }
   );
 </script>
@@ -972,15 +982,12 @@
   :deep(.param-input:not(.arco-input-focus, .arco-select-view-focus)) {
     &:not(:hover) {
       border-color: transparent !important;
-
       .arco-input::placeholder {
         @apply invisible;
       }
-
       .arco-select-view-icon {
         @apply invisible;
       }
-
       .arco-select-view-value {
         color: var(--color-text-brand);
       }

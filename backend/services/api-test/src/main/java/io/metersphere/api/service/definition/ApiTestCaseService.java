@@ -108,6 +108,7 @@ public class ApiTestCaseService extends MoveNodeService {
     @Resource
     private FunctionalCaseTestMapper functionalCaseTestMapper;
 
+
     private static final String CASE_TABLE = "api_test_case";
     private static final int MAX_TAG_SIZE = 10;
 
@@ -204,7 +205,7 @@ public class ApiTestCaseService extends MoveNodeService {
         return requestStr;
     }
 
-    private ApiTestCase checkResourceExist(String id) {
+    public ApiTestCase checkResourceExist(String id) {
         ApiTestCase testCase = apiTestCaseMapper.selectByPrimaryKey(id);
         if (testCase == null) {
             throw new MSException(Translator.get("api_test_case_not_exist"));
@@ -315,8 +316,11 @@ public class ApiTestCaseService extends MoveNodeService {
         apiTestCaseMapper.updateByPrimaryKeySelective(update);
     }
 
-    public List<ApiTestCaseDTO> page(ApiTestCasePageRequest request, boolean deleted, boolean isRepeat) {
-        List<ApiTestCaseDTO> apiCaseLists = extApiTestCaseMapper.listByRequest(request, deleted, isRepeat);
+    public List<ApiTestCaseDTO> page(ApiTestCasePageRequest request, boolean deleted, boolean isRepeat, String testPlanId) {
+        if (CollectionUtils.isEmpty(request.getProtocols())) {
+            return new ArrayList<>();
+        }
+        List<ApiTestCaseDTO> apiCaseLists = extApiTestCaseMapper.listByRequest(request, deleted, isRepeat, testPlanId);
         buildApiTestCaseDTO(apiCaseLists);
         return apiCaseLists;
     }
@@ -379,6 +383,7 @@ public class ApiTestCaseService extends MoveNodeService {
     }
 
     public void batchDelete(ApiTestCaseBatchRequest request, String userId) {
+
         List<String> ids = doSelectIds(request, true);
         if (CollectionUtils.isEmpty(ids)) {
             return;
@@ -418,7 +423,7 @@ public class ApiTestCaseService extends MoveNodeService {
     }
 
     public List<String> doSelectIds(ApiTestCaseBatchRequest request, boolean deleted) {
-        if (request.isSelectAll()) {
+        if (request.isSelectAll() && CollectionUtils.isNotEmpty(request.getProtocols())) {
             List<String> ids = extApiTestCaseMapper.getIds(request, deleted);
             if (CollectionUtils.isNotEmpty(request.getExcludeIds())) {
                 ids.removeAll(request.getExcludeIds());
@@ -453,6 +458,7 @@ public class ApiTestCaseService extends MoveNodeService {
     }
 
     public void batchEdit(ApiCaseBatchEditRequest request, String userId) {
+
         List<String> ids = doSelectIds(request, false);
         if (CollectionUtils.isEmpty(ids)) {
             return;
@@ -568,12 +574,26 @@ public class ApiTestCaseService extends MoveNodeService {
             List<ExecuteReportDTO> historyDeletedList = extApiReportMapper.getHistoryDeleted(reportIds);
             historyDeletedMap = historyDeletedList.stream().collect(Collectors.toMap(ExecuteReportDTO::getId, Function.identity()));
         }
+
+        Map<String, String> testPlanIdMap = executeList.stream()
+                .filter(apiReport -> !StringUtils.equals(apiReport.getTestPlanId(), "NONE"))
+                .collect(Collectors.toMap(ExecuteReportDTO::getId, ExecuteReportDTO::getTestPlanId));
+        List<String> testPlanIds = new ArrayList<>(testPlanIdMap.keySet());
+        Map<String, String> testPlanNumMap = new HashMap<>();
+        if (CollectionUtils.isNotEmpty(testPlanIds)) {
+            List<ExecuteReportDTO> testPlanNameLists = extApiTestCaseMapper.getTestPlanNum(testPlanIds);
+            testPlanNumMap = testPlanNameLists.stream().collect(Collectors.toMap(ExecuteReportDTO::getId, ExecuteReportDTO::getTestPlanNum));
+        }
         Map<String, ExecuteReportDTO> finalHistoryDeletedMap = historyDeletedMap;
+        Map<String, String> finalTestPlanNumMap = testPlanNumMap;
         executeList.forEach(apiReport -> {
             apiReport.setOperationUser(userMap.get(apiReport.getCreateUser()));
             Date date = new Date(apiReport.getStartTime());
             apiReport.setNum(sdf.format(date));
             apiReport.setHistoryDeleted(MapUtils.isNotEmpty(finalHistoryDeletedMap) && !finalHistoryDeletedMap.containsKey(apiReport.getId()));
+            if (MapUtils.isNotEmpty(testPlanIdMap) && testPlanIdMap.containsKey(apiReport.getId())) {
+                apiReport.setTestPlanNum(StringUtils.join(Translator.get("test_plan"), ": ", finalTestPlanNumMap.get(apiReport.getId())));
+            }
         });
         return executeList;
     }
@@ -619,7 +639,7 @@ public class ApiTestCaseService extends MoveNodeService {
                         return apiDefinitionExecuteInfo;
                     }
                 })
-                .filter(item -> item != null)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -731,7 +751,7 @@ public class ApiTestCaseService extends MoveNodeService {
         return doExecute(taskRequest, runRequest, request.getApiDefinitionId(), request.getEnvironmentId());
     }
 
-    private TaskRequestDTO doExecute(TaskRequestDTO taskRequest, ApiResourceRunRequest runRequest, String apiDefinitionId, String envId) {
+    public TaskRequestDTO doExecute(TaskRequestDTO taskRequest, ApiResourceRunRequest runRequest, String apiDefinitionId, String envId) {
 
         ApiParamConfig apiParamConfig = apiExecuteService.getApiParamConfig(taskRequest.getTaskItem().getReportId(), taskRequest.getTaskInfo().getProjectId());
 
@@ -749,10 +769,14 @@ public class ApiTestCaseService extends MoveNodeService {
      * 获取执行脚本
      */
     public GetRunScriptResult getRunScript(GetRunScriptRequest request) {
+        ApiTestCase apiTestCase = apiTestCaseMapper.selectByPrimaryKey(request.getTaskItem().getResourceId());
+        return getRunScript(request, apiTestCase);
+    }
+
+    public GetRunScriptResult getRunScript(GetRunScriptRequest request, ApiTestCase apiTestCase) {
         TaskItem taskItem = request.getTaskItem();
-        ApiTestCase apiTestCase = apiTestCaseMapper.selectByPrimaryKey(taskItem.getResourceId());
         ApiDefinition apiDefinition = apiDefinitionMapper.selectByPrimaryKey(apiTestCase.getApiDefinitionId());
-        ApiTestCaseBlob apiTestCaseBlob = apiTestCaseBlobMapper.selectByPrimaryKey(taskItem.getResourceId());
+        ApiTestCaseBlob apiTestCaseBlob = apiTestCaseBlobMapper.selectByPrimaryKey(apiTestCase.getId());
         ApiParamConfig apiParamConfig = apiExecuteService.getApiParamConfig(taskItem.getReportId(), apiTestCase.getProjectId());
 
         AbstractMsTestElement msTestElement = ApiDataUtils.parseObject(new String(apiTestCaseBlob.getRequest()), AbstractMsTestElement.class);
@@ -762,7 +786,7 @@ public class ApiTestCaseService extends MoveNodeService {
         apiExecuteService.setTestElementParam(msTestElement, apiTestCase.getProjectId(), request.getTaskItem());
 
         // 设置环境信息
-        apiParamConfig.setEnvConfig(environmentService.get(getEnvId(request.getRunModeConfig(), apiTestCase)));
+        apiParamConfig.setEnvConfig(environmentService.get(getEnvId(request.getRunModeConfig(), apiTestCase.getEnvironmentId())));
         GetRunScriptResult runScriptResult = new GetRunScriptResult();
         // 记录请求数量
         runScriptResult.setRequestCount(1L);
@@ -780,12 +804,13 @@ public class ApiTestCaseService extends MoveNodeService {
      * 优先使用运行配置的环境
      * 没有则使用用例自身的环境
      *
-     * @param runModeConfig
-     * @param apiTestCase
      * @return
      */
-    public String getEnvId(ApiRunModeConfigDTO runModeConfig, ApiTestCase apiTestCase) {
-        return StringUtils.isBlank(runModeConfig.getEnvironmentId()) ? apiTestCase.getEnvironmentId() : runModeConfig.getEnvironmentId();
+    public String getEnvId(ApiRunModeConfigDTO runModeConfig, String caseEnvId) {
+        if (StringUtils.isBlank(runModeConfig.getEnvironmentId()) || StringUtils.equals(runModeConfig.getEnvironmentId(), CommonConstants.DEFAULT_NULL_VALUE)) {
+            return caseEnvId;
+        }
+        return runModeConfig.getEnvironmentId();
     }
 
     /**
@@ -799,6 +824,18 @@ public class ApiTestCaseService extends MoveNodeService {
     public ApiTestCaseRecord initApiReport(ApiTestCase apiTestCase, String reportId, String poolId, String userId) {
 
         // 初始化报告
+        ApiReport apiReport = getApiReport(apiTestCase, reportId, poolId, userId);
+
+        // 创建报告和用例的关联关系
+        ApiTestCaseRecord apiTestCaseRecord = getApiTestCaseRecord(apiTestCase, apiReport);
+
+        apiReportService.insertApiReport(List.of(apiReport), List.of(apiTestCaseRecord));
+        //初始化步骤
+        apiReportService.insertApiReportStep(List.of(getApiReportStep(apiTestCase.getId(), apiTestCase.getName(), reportId, 1L)));
+        return apiTestCaseRecord;
+    }
+
+    public ApiReport getApiReport(ApiTestCase apiTestCase, String reportId, String poolId, String userId) {
         ApiReport apiReport = getApiReport(userId);
         apiReport.setId(reportId);
         apiReport.setTriggerMode(TaskTriggerMode.MANUAL.name());
@@ -807,22 +844,15 @@ public class ApiTestCaseService extends MoveNodeService {
         apiReport.setPoolId(poolId);
         apiReport.setEnvironmentId(apiTestCase.getEnvironmentId());
         apiReport.setProjectId(apiTestCase.getProjectId());
-
-        // 创建报告和用例的关联关系
-        ApiTestCaseRecord apiTestCaseRecord = getApiTestCaseRecord(apiTestCase, apiReport);
-
-        apiReportService.insertApiReport(List.of(apiReport), List.of(apiTestCaseRecord));
-        //初始化步骤
-        apiReportService.insertApiReportStep(List.of(getApiReportStep(apiTestCase, reportId, 1L)));
-        return apiTestCaseRecord;
+        return apiReport;
     }
 
-    private ApiReportStep getApiReportStep(ApiTestCase apiTestCase, String reportId, long sort) {
+    public ApiReportStep getApiReportStep(String stepId, String stepName, String reportId, long sort) {
         ApiReportStep apiReportStep = new ApiReportStep();
         apiReportStep.setReportId(reportId);
-        apiReportStep.setStepId(apiTestCase.getId());
+        apiReportStep.setStepId(stepId);
         apiReportStep.setSort(sort);
-        apiReportStep.setName(apiTestCase.getName());
+        apiReportStep.setName(stepName);
         apiReportStep.setStepType(ApiExecuteResourceType.API_CASE.name());
         return apiReportStep;
     }
@@ -857,7 +887,7 @@ public class ApiTestCaseService extends MoveNodeService {
 
     public TaskInfo getTaskInfo(String projectId, String runModule) {
         TaskInfo taskInfo = apiExecuteService.getTaskInfo(projectId);
-        taskInfo.setResourceType(ApiResourceType.API_CASE.name());
+        taskInfo.setResourceType(ApiExecuteResourceType.API_CASE.name());
         taskInfo.setRunMode(runModule);
         taskInfo.setNeedParseScript(false);
         return taskInfo;
@@ -881,7 +911,7 @@ public class ApiTestCaseService extends MoveNodeService {
     }
 
     public void moveNode(PosRequest posRequest) {
-        NodeMoveRequest request = super.getNodeMoveRequest(posRequest,true);
+        NodeMoveRequest request = super.getNodeMoveRequest(posRequest, true);
         MoveNodeSortDTO sortDTO = super.getNodeSortDTO(
                 posRequest.getProjectId(),
                 request,

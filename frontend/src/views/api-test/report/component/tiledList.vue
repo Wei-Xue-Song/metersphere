@@ -6,7 +6,7 @@
     }"
   >
     <!-- 步骤树 -->
-    <stepTree
+    <StepTree
       ref="stepTreeRef"
       v-model:steps="tiledList"
       v-model:expandedKeys="expandedKeys"
@@ -15,6 +15,7 @@
       :expand-all="isExpandAll"
       :console="props.reportDetail.console"
       :report-id="props.reportDetail.id"
+      :get-report-step-detail="props.getReportStepDetail"
       @detail="showDetail"
     />
     <!-- 步骤抽屉 -->
@@ -26,6 +27,7 @@
       :show-type="props.showType"
       :console="props.reportDetail.console"
       :report-id="props.reportDetail.id"
+      :get-report-step-detail="props.getReportStepDetail"
     />
   </div>
 </template>
@@ -47,6 +49,7 @@
     activeType: 'tiled' | 'tab'; // 平铺模式|tab模式
     showType: 'API' | 'CASE'; // 接口场景|用例
     keyWords: string;
+    getReportStepDetail?: (...args: any) => Promise<any>; // 获取步骤的详情内容接口
   }>();
 
   const tiledList = ref<ScenarioItemType[]>([]);
@@ -94,31 +97,29 @@
     ScenarioStepType.CUSTOM_REQUEST,
     ScenarioStepType.SCRIPT,
   ]);
-
   function searchStep() {
     const splitLevel = props.keyWords.split('-');
     const stepTypeStatus = splitLevel[1];
-    expandedKeys.value = [];
+    const stepType = splitLevel[0] === 'CUSTOM_REQUEST' ? ['API', 'API_CASE', 'CUSTOM_REQUEST'] : splitLevel[0];
+
     const search = (_data: ScenarioItemType[]) => {
       const result: ScenarioItemType[] = [];
+
       _data.forEach((item) => {
         const isStepChildren = item.children && item?.children.length && showApiType.value.includes(item.stepType);
         if (
-          (item.status && item.status === stepTypeStatus && stepTypeStatus !== 'scriptIdentifier') ||
-          (stepTypeStatus.includes('scriptIdentifier') && item.scriptIdentifier)
+          stepType.includes(item.stepType) &&
+          ((item.status && item.status === stepTypeStatus && stepTypeStatus !== 'scriptIdentifier') ||
+            (stepTypeStatus.includes('scriptIdentifier') && item.scriptIdentifier))
         ) {
-          let tempArray: ScenarioItemType[] = [];
-          if (!isStepChildren && item.children && item.children.length) {
-            tempArray = search(item.children);
-          }
           const resItem = {
             ...item,
             expanded: false,
             stepChildren: isStepChildren ? cloneDeep(item.children) : [],
-            children: tempArray,
+            children: isStepChildren ? [] : item.children,
           };
           result.push(resItem);
-        } else if (item.children && splitLevel[0] === ScenarioStepType.CUSTOM_REQUEST) {
+        } else if (item.children) {
           const filterData = search(item.children);
           if (filterData.length) {
             const filterItem = {
@@ -126,14 +127,17 @@
               expanded: false,
               children: filterData,
             };
+
             if (isStepChildren) {
               filterItem.stepChildren = cloneDeep(item.children);
+
               filterItem.children = [];
             }
             result.push(filterItem);
           }
         }
       });
+
       return result;
     };
 

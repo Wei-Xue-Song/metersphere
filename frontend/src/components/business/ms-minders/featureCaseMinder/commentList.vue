@@ -33,9 +33,11 @@
       </template>
     </div>
     <inputComment
+      v-if="hasEditPermission"
       ref="commentInputRef"
       v-model:content="content"
       v-model:notice-user-ids="noticeUserIds"
+      v-model:filed-ids="uploadFileIds"
       v-permission="['FUNCTIONAL_CASE:READ+COMMENT']"
       :preview-url="PreviewEditorImageUrl"
       :is-active="isActive"
@@ -70,6 +72,7 @@
   import { PreviewEditorImageUrl } from '@/api/requrls/case-management/featureCase';
   import { useI18n } from '@/hooks/useI18n';
   import useModal from '@/hooks/useModal';
+  import { hasAnyPermission } from '@/utils/permission';
 
   const props = defineProps<{
     activeCase: Record<string, any>;
@@ -77,6 +80,8 @@
 
   const { t } = useI18n();
   const { openModal } = useModal();
+
+  const hasEditPermission = hasAnyPermission(['FUNCTIONAL_CASE:READ+COMMENT']);
 
   async function handleUploadImage(file: File) {
     const { data } = await editorUploadFile({
@@ -203,7 +208,7 @@
   const commentInputRef = ref<InstanceType<typeof inputComment>>();
   const content = ref('');
   const isActive = ref<boolean>(false);
-
+  const uploadFileIds = ref<string[]>([]);
   const noticeUserIds = ref<string[]>([]);
 
   /**
@@ -219,6 +224,7 @@
         parentId: '',
         content: currentContent,
         event: noticeUserIds.value.join(';') ? 'AT' : 'COMMENT', // 任务事件(仅评论: ’COMMENT‘; 评论并@: ’AT‘; 回复评论/回复并@: ’REPLAY‘;)
+        uploadFileIds: uploadFileIds.value,
       };
       await createCommentList(params);
       getAllCommentList();

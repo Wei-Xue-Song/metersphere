@@ -6,6 +6,7 @@ import io.metersphere.api.dto.definition.ExecuteReportDTO;
 import io.metersphere.api.dto.report.ReportDTO;
 import io.metersphere.api.mapper.ExtApiReportMapper;
 import io.metersphere.api.mapper.ExtApiScenarioReportMapper;
+import io.metersphere.engine.MsHttpClient;
 import io.metersphere.project.domain.Project;
 import io.metersphere.project.mapper.ProjectMapper;
 import io.metersphere.sdk.constants.*;
@@ -24,6 +25,7 @@ import io.metersphere.system.dto.sdk.OptionDTO;
 import io.metersphere.system.dto.taskcenter.TaskCenterDTO;
 import io.metersphere.system.dto.taskcenter.request.TaskCenterBatchRequest;
 import io.metersphere.system.dto.taskcenter.request.TaskCenterPageRequest;
+import io.metersphere.system.log.aspect.OperationLogAspect;
 import io.metersphere.system.log.constants.OperationLogModule;
 import io.metersphere.system.log.constants.OperationLogType;
 import io.metersphere.system.log.dto.LogDTO;
@@ -36,7 +38,6 @@ import io.metersphere.system.service.UserLoginService;
 import io.metersphere.system.utils.PageUtils;
 import io.metersphere.system.utils.Pager;
 import io.metersphere.system.utils.SessionUtils;
-import io.metersphere.system.utils.TaskRunnerClient;
 import jakarta.annotation.Resource;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
@@ -222,10 +223,10 @@ public class ApiTaskCenterService {
     }
 
     public void systemStop(TaskCenterBatchRequest request, String userId) {
-        stopApiTask(request, new ArrayList<>(), userId, SYSTEM_STOP, HttpMethodConstants.POST.name(), OperationLogModule.SETTING_SYSTEM_TASK_CENTER);
+        stopApiTask(request, new ArrayList<>(), userId, OperationLogModule.SETTING_SYSTEM_TASK_CENTER);
     }
 
-    private void stopApiTask(TaskCenterBatchRequest request, List<String> projectIds, String userId, String path, String method, String module) {
+    private void stopApiTask(TaskCenterBatchRequest request, List<String> projectIds, String userId, String module) {
         List<ReportDTO> reports = new ArrayList<>();
         if (request.getModuleType().equals(TaskCenterResourceType.API_CASE.toString())) {
             if (request.isSelectAll()) {
@@ -241,26 +242,21 @@ public class ApiTaskCenterService {
             }
         }
         if (CollectionUtils.isNotEmpty(reports)) {
-            detailReport(request, reports, userId, path, method, module);
+            detailReport(request, reports, userId, module);
         }
     }
 
     private void detailReport(TaskCenterBatchRequest request,
                               List<ReportDTO> reports,
                               String userId,
-                              String path,
-                              String method,
                               String module) {
         Map<String, List<String>> poolIdMap = reports.stream()
                 .collect(Collectors.groupingBy(ReportDTO::getPoolId, Collectors.mapping(ReportDTO::getId, Collectors.toList())));
-        // 根据报告id分组 key是报告id value是 是否集成
-        Map<String, Boolean> integrationMap = reports.stream()
-                .collect(Collectors.toMap(ReportDTO::getId, ReportDTO::getIntegrated));
         poolIdMap.forEach((poolId, reportList) -> {
             TestResourcePoolReturnDTO testResourcePoolDTO = testResourcePoolService.getTestResourcePoolDetail(poolId);
             List<TestResourceNodeDTO> nodesList = testResourcePoolDTO.getTestResourceReturnDTO().getNodesList();
             if (CollectionUtils.isNotEmpty(nodesList)) {
-                stopTask(request, reportList, nodesList, userId, path, method, module, integrationMap);
+                stopTask(request, reportList, nodesList, userId, module, reports);
             }
         });
     }
@@ -269,12 +265,17 @@ public class ApiTaskCenterService {
                          List<String> reportList,
                          List<TestResourceNodeDTO> nodesList,
                          String userId,
-                         String path,
-                         String method,
                          String module,
-                         Map<String, Boolean> integrationMap) {
+                         List<ReportDTO> reports) {
+        // 根据报告id分组 key是报告id value是 是否集成
+        Map<String, Boolean> integrationMap = reports.stream()
+                .collect(Collectors.toMap(ReportDTO::getId, ReportDTO::getIntegrated));
+        Map<String, String> resourceIdMap = reports.stream()
+                .collect(Collectors.toMap(ReportDTO::getId, ReportDTO::getResourceId));
+        Map<String, String> testPlanIdMap = reports.stream()
+                .collect(Collectors.toMap(ReportDTO::getId, ReportDTO::getTestPlanId));
         nodesList.parallelStream().forEach(node -> {
-            String endpoint = TaskRunnerClient.getEndpoint(node.getIp(), node.getPort());
+            String endpoint = MsHttpClient.getEndpoint(node.getIp(), node.getPort());
             //需要去除取消勾选的report
             if (CollectionUtils.isNotEmpty(request.getExcludeIds())) {
                 reportList.removeAll(request.getExcludeIds());
@@ -290,36 +291,48 @@ public class ApiTaskCenterService {
             SubListUtils.dealForSubList(reportList, 100, (subList) -> {
                 try {
                     LogUtils.info(String.format("开始发送停止请求到 %s 节点执行", endpoint), subList.toString());
-                    TaskRunnerClient.stopApi(endpoint, subList);
+                    MsHttpClient.stopApi(endpoint, subList);
                 } catch (Exception e) {
                     LogUtils.error(e);
                 } finally {
                     subList.forEach(reportId -> {
-                        TaskInfo taskInfo = taskRequestDTO.getTaskInfo();
-                        TaskItem taskItem = new TaskItem();
-                        taskRequestDTO.setTaskItem(taskItem);
-                        taskItem.setReportId(reportId);
-                        taskInfo.setResourceType(request.getModuleType());
-                        taskInfo.getRunModeConfig().setIntegratedReport(integrationMap.get(reportId));
                         if (BooleanUtils.isTrue(integrationMap.get(reportId))) {
-                            taskInfo.getRunModeConfig().getCollectionReport().setReportId(reportId);
+                            TaskInfo taskInfo = taskRequestDTO.getTaskInfo();
+                            TaskItem taskItem = new TaskItem();
+                            taskItem.setReportId(reportId);
+                            taskInfo.setResourceType(request.getModuleType());
+                            taskItem.setResourceId(resourceIdMap.getOrDefault(reportId, null));
+                            // 这里需要兼容测试计划批量执行的类型
+                            if (StringUtils.isNotEmpty(testPlanIdMap.get(reportId))
+                                    && !StringUtils.equals(testPlanIdMap.get(reportId), "NONE")) {
+                                if (StringUtils.equals(request.getModuleType(), TaskCenterResourceType.API_CASE.toString())) {
+                                    taskInfo.setResourceType(ApiExecuteResourceType.TEST_PLAN_API_CASE.name());
+                                } else if (StringUtils.equals(request.getModuleType(), TaskCenterResourceType.API_SCENARIO.toString())) {
+                                    taskInfo.setResourceType(ApiExecuteResourceType.TEST_PLAN_API_SCENARIO.name());
+                                }
+                            }
+                            taskInfo.getRunModeConfig().setIntegratedReport(integrationMap.get(reportId));
+                            if (BooleanUtils.isTrue(integrationMap.get(reportId))) {
+                                taskInfo.getRunModeConfig().getCollectionReport().setReportId(reportId);
+                            }
+                            taskRequestDTO.setTaskItem(taskItem);
+                            result.setRequest(taskRequestDTO);
+                            kafkaTemplate.send(KafkaTopicConstants.API_REPORT_TOPIC, JSON.toJSONString(result));
                         }
-                        result.setRequest(taskRequestDTO);
-                        kafkaTemplate.send(KafkaTopicConstants.API_REPORT_TOPIC, JSON.toJSONString(result));
                     });
 
                     if (request.getModuleType().equals(TaskCenterResourceType.API_CASE.toString())) {
                         //记录日志
-                        saveLog(subList, userId, path, method, StringUtils.join(module, "_REAL_TIME_API_CASE"), TaskCenterResourceType.API_CASE.toString());
+                        saveLog(subList, userId, StringUtils.join(module, "_REAL_TIME_API_CASE"), TaskCenterResourceType.API_CASE.toString());
                     } else if (request.getModuleType().equals(TaskCenterResourceType.API_SCENARIO.toString())) {
-                        saveLog(subList, userId, path, method, StringUtils.join(module, "_REAL_TIME_API_SCENARIO"), TaskCenterResourceType.API_SCENARIO.toString());
+                        saveLog(subList, userId, StringUtils.join(module, "_REAL_TIME_API_SCENARIO"), TaskCenterResourceType.API_SCENARIO.toString());
                     }
                 }
             });
         });
     }
 
-    private void saveLog(List<String> ids, String userId, String path, String method, String module, String type) {
+    private void saveLog(List<String> ids, String userId, String module, String type) {
         List<ReportDTO> reports = new ArrayList<>();
         if (StringUtils.equals(type, TaskCenterResourceType.API_CASE.toString())) {
             reports = extApiReportMapper.selectByIds(ids);
@@ -339,8 +352,8 @@ public class ApiTaskCenterService {
                     .organizationId(orgMap.get(reportDTO.getProjectId()))
                     .type(OperationLogType.UPDATE.name())
                     .module(module)
-                    .method(method)
-                    .path(path)
+                    .method(OperationLogAspect.getMethod())
+                    .path(OperationLogAspect.getPath())
                     .sourceId(reportDTO.getId())
                     .content(String.format("停止任务：%s", reportDTO.getName()))
                     .createUser(userId)
@@ -354,22 +367,22 @@ public class ApiTaskCenterService {
         checkOrganizationExist(orgId);
         List<OptionDTO> projectList = getOrgProjectList(orgId);
         List<String> projectIds = projectList.stream().map(OptionDTO::getId).toList();
-        stopApiTask(request, projectIds, userId, ORG_STOP, HttpMethodConstants.POST.name(), OperationLogModule.SETTING_ORGANIZATION_TASK_CENTER);
+        stopApiTask(request, projectIds, userId, OperationLogModule.SETTING_ORGANIZATION_TASK_CENTER);
 
     }
 
     public void projectStop(TaskCenterBatchRequest request, String currentProjectId, String userId) {
         checkProjectExist(currentProjectId);
-        stopApiTask(request, List.of(currentProjectId), userId, PROJECT_STOP, HttpMethodConstants.POST.name(), OperationLogModule.PROJECT_MANAGEMENT_TASK_CENTER);
+        stopApiTask(request, List.of(currentProjectId), userId, OperationLogModule.PROJECT_MANAGEMENT_TASK_CENTER);
     }
 
-    public void stopById(String moduleType, String id, String userId, String module, String path) {
+    public void stopById(String moduleType, String id, String userId, String module) {
         List<String> reportIds = new ArrayList<>();
         reportIds.add(id);
         TaskCenterBatchRequest request = new TaskCenterBatchRequest();
         request.setSelectIds(reportIds);
         request.setModuleType(moduleType);
-        stopApiTask(request, null, userId, path, HttpMethodConstants.GET.name(), module);
+        stopApiTask(request, null, userId, module);
     }
 
 

@@ -48,7 +48,7 @@
   import { useI18n } from '@/hooks/useI18n';
   import { characterLimit } from '@/utils';
 
-  import type { TestPlanDetail, TestPlanItem } from '@/models/testPlan/testPlan';
+  import type { CreateTask, TestPlanDetail, TestPlanItem } from '@/models/testPlan/testPlan';
   import { testPlanTypeEnum } from '@/enums/testPlanEnum';
 
   const { t } = useI18n();
@@ -56,6 +56,7 @@
   const props = defineProps<{
     visible: boolean;
     record: TestPlanItem | TestPlanDetail | undefined; // 表record
+    scheduleConfig?: CreateTask;
   }>();
 
   const emit = defineEmits<{
@@ -94,16 +95,22 @@
     if (props.record?.type === testPlanTypeEnum.GROUP) {
       return t('testPlan.testPlanGroup.planGroupDeleteContent');
     }
+    let deleteMessage;
     switch (props.record && props.record.status) {
       case 'ARCHIVED':
-        return t('testPlan.testPlanIndex.deleteArchivedPlan');
+        deleteMessage = t('testPlan.testPlanIndex.deleteArchivedPlan');
+        break;
       case 'UNDERWAY':
-        return t('testPlan.testPlanIndex.deleteRunningPlan');
+        deleteMessage = t('testPlan.testPlanIndex.deleteRunningPlan');
+        break;
       case 'COMPLETED':
-        return t('testPlan.testPlanIndex.deleteCompletedPlan');
+        deleteMessage = t('testPlan.testPlanIndex.deleteCompletedPlan');
+        break;
       default:
-        return t('testPlan.testPlanIndex.deletePendingPlan');
+        deleteMessage = t('testPlan.testPlanIndex.deletePendingPlan');
     }
+    const scheduledMessage = props.scheduleConfig ? t('testPlan.testPlanIndex.scheduledTask') : '';
+    return `${deleteMessage}${scheduledMessage}${t('testPlan.testPlanIndex.operateWithCaution')}`;
   });
 
   const showArchive = computed(() => {

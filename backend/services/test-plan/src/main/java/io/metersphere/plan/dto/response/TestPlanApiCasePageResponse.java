@@ -39,6 +39,9 @@ public class TestPlanApiCasePageResponse implements Serializable {
     @Schema(description = "模块ID")
     private String moduleId;
 
+    @Schema(description = "模块名称")
+    private String moduleName;
+
     @Schema(description = "环境fk")
     private String environmentId;
 
@@ -66,9 +69,18 @@ public class TestPlanApiCasePageResponse implements Serializable {
     @Schema(description = "测试集id")
     private String testPlanCollectionId;
 
-    @Schema(description = "计划集环境")
-    private String collectEnvironmentId;
+    @Schema(description = "测试集名称")
+    private String testPlanCollectionName;
 
     @Schema(description = "报告id")
     private String lastExecReportId;
+
+    @Schema(description = "状态")
+    private String status;
+
+    @Schema(description = "协议")
+    private String protocol;
+
+    @Schema(description = "接口用例id")
+    private String apiTestCaseId;
 }

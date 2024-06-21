@@ -32,8 +32,7 @@
             {{ detailCount.errorCount }}
           </td>
         </tr>
-        <!-- TODO 这个版本暂时不上 -->
-        <!-- <tr>
+        <tr>
           <td class="popover-label-td">
             <div class="mb-[2px] mr-[4px] h-[6px] w-[6px] rounded-full bg-[rgb(var(--warning-6))]"></div>
             <div>{{ t('common.fakeError') }}</div>
@@ -41,7 +40,7 @@
           <td class="popover-value-td">
             {{ detailCount.fakeErrorCount }}
           </td>
-        </tr> -->
+        </tr>
         <tr>
           <td class="popover-label-td">
             <div class="mb-[2px] mr-[4px] h-[6px] w-[6px] rounded-full bg-[var(--color-fill-p-3)]"></div>
@@ -133,7 +132,7 @@
     color: var(--color-text-4);
   }
   .popover-value-td {
-    @apply font-medium;
+    @apply text-right font-medium;
 
     padding-top: 8px;
     color: var(--color-text-1);

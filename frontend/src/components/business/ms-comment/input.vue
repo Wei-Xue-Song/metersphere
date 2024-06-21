@@ -19,9 +19,11 @@
           v-if="props.mode === 'rich'"
           v-model:raw="currentContent"
           v-model:commentIds="commentIds"
+          v-model:filed-ids="uploadFileIds"
           :upload-image="props.uploadImage"
           :preview-url="props.previewUrl"
           class="w-full"
+          :limit-length="1000"
           placeholder="ms.comment.enterPlaceHolderTip"
         />
         <a-textarea
@@ -31,7 +33,7 @@
         ></a-textarea>
         <div class="mt-4 flex flex-row justify-end gap-[12px]">
           <a-button @click="cancelClick">{{ t('common.cancel') }}</a-button>
-          <a-button type="primary" :disabled="!currentContent" @click="publish">{{ t('common.publish') }}</a-button>
+          <a-button type="primary" :disabled="isDisabled" @click="publish">{{ t('common.publish') }}</a-button>
         </div>
       </div>
     </div>
@@ -66,6 +68,7 @@
 
   const currentContent = defineModel<string>('defaultValue', { default: '' });
   const commentIds = defineModel<string[]>('noticeUserIds', { default: [] });
+  const uploadFileIds = defineModel<string[]>('filedIds', { default: [] });
   const userStore = useUserStore();
   const emit = defineEmits<{
     (event: 'publish', value: string): void;
@@ -98,6 +101,11 @@
   });
   onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleGlobalKeyDown);
+  });
+
+  const isDisabled = computed(() => {
+    // 此处如果富文本输入内容后就算手动清空，还是会触发文本行内容为<p style=""></p>
+    return !currentContent.value || currentContent.value === '<p style=""></p>';
   });
 
   defineExpose({

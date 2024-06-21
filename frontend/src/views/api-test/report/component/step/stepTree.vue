@@ -176,6 +176,7 @@
                   :is-response-model="true"
                   :report-id="props?.reportId"
                   :steps="steps"
+                  :get-report-step-detail="props.getReportStepDetail"
                 />
               </Suspense>
             </div>
@@ -222,6 +223,7 @@
     console?: string;
     reportId?: string;
     expandedKeys: (string | number)[];
+    getReportStepDetail?: (...args: any) => Promise<any>; // 获取步骤的详情内容接口
   }>();
   const loading = ref(false);
 
@@ -240,6 +242,7 @@
     ScenarioStepType.API_CASE,
     ScenarioStepType.CUSTOM_REQUEST,
     ScenarioStepType.SCRIPT,
+    ScenarioStepType.TEST_PLAN_API_CASE,
   ]);
 
   const innerNumber = ref<number>(0);
@@ -296,6 +299,7 @@
     ScenarioStepType.LOOP_CONTROLLER,
     ScenarioStepType.IF_CONTROLLER,
     ScenarioStepType.ONCE_ONLY_CONTROLLER,
+    ScenarioStepType.TEST_PLAN_API_CASE,
   ]);
   function getShowExpand(item: ScenarioItemType) {
     if (props.showType === 'API') {

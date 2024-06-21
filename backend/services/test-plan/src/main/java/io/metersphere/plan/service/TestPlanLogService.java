@@ -3,7 +3,6 @@ package io.metersphere.plan.service;
 import io.metersphere.plan.domain.TestPlan;
 import io.metersphere.plan.domain.TestPlanExample;
 import io.metersphere.plan.dto.request.TestPlanBatchEditRequest;
-import io.metersphere.plan.dto.request.TestPlanCopyRequest;
 import io.metersphere.plan.mapper.TestPlanMapper;
 import io.metersphere.project.domain.Project;
 import io.metersphere.project.mapper.ProjectMapper;
@@ -32,7 +31,6 @@ import java.util.stream.Collectors;
 @Transactional(rollbackFor = Exception.class)
 public class TestPlanLogService {
 
-    private String logModule = OperationLogModule.TEST_PLAN;
 
     @Resource
     private ProjectMapper projectMapper;
@@ -48,7 +46,7 @@ public class TestPlanLogService {
                 .projectId(project.getId())
                 .organizationId(project.getOrganizationId())
                 .type(OperationLogType.UPDATE.name())
-                .module(OperationLogModule.TEST_PLAN)
+                .module(getLogModule(testPlan))
                 .sourceId(testPlan.getId())
                 .content(Translator.get("test_plan_schedule") + ":" + testPlan.getName())
                 .build().getLogDTO();
@@ -69,7 +67,7 @@ public class TestPlanLogService {
                 .projectId(module.getProjectId())
                 .organizationId(project.getOrganizationId())
                 .type(OperationLogType.ADD.name())
-                .module(logModule)
+                .module(getLogModule(module))
                 .method(requestMethod)
                 .path(requestUrl)
                 .sourceId(module.getId())
@@ -96,11 +94,11 @@ public class TestPlanLogService {
                 .projectId(projectId)
                 .organizationId(project.getOrganizationId())
                 .type(OperationLogType.UPDATE.name())
-                .module(logModule)
+                .module(getLogModule(newTestPlan))
                 .method(requestMethod)
                 .path(requestUrl)
                 .sourceId(newTestPlan.getId())
-                .content(generateTestPlanSimpleContent(newTestPlan, Translator.get("update")))
+                .content(newTestPlan.getName())
                 .originalValue(JSON.toJSONBytes(oldTestPlan))
                 .modifiedValue(JSON.toJSONBytes(newTestPlan))
                 .createUser(operator)
@@ -122,11 +120,11 @@ public class TestPlanLogService {
                 .projectId(deleteTestPlan.getProjectId())
                 .organizationId(project.getOrganizationId())
                 .type(OperationLogType.DELETE.name())
-                .module(logModule)
+                .module(getLogModule(deleteTestPlan))
                 .method(requestMethod)
                 .path(requestUrl)
                 .sourceId(deleteTestPlan.getId())
-                .content(generateTestPlanSimpleContent(deleteTestPlan, Translator.get("delete")))
+                .content(deleteTestPlan.getName())
                 .originalValue(JSON.toJSONBytes(deleteTestPlan))
                 .createUser(operator)
                 .build().getLogDTO();
@@ -147,7 +145,7 @@ public class TestPlanLogService {
                 testPlan.getId(),
                 null,
                 OperationLogType.ARCHIVED.name(),
-                logModule,
+                getLogModule(testPlan),
                 testPlan.getName());
         dto.setPath("/test-plan/archived");
         dto.setMethod(HttpMethodConstants.GET.name());
@@ -157,25 +155,23 @@ public class TestPlanLogService {
 
     /**
      * 复制日志
-     *
-     * @param request 请求参数
-     * @return 日志对象
      */
-    public LogDTO copyLog(TestPlanCopyRequest request) {
-        TestPlan testPlan = testPlanMapper.selectByPrimaryKey(request.getId());
-        testPlan.setName(request.getName());
-        LogDTO dto = new LogDTO(
-                request.getProjectId(),
-                null,
-                null,
-                null,
-                OperationLogType.COPY.name(),
-                logModule,
-                generateTestPlanSimpleContent(testPlan, Translator.get("copy")));
-        dto.setPath("/test-plan/copy");
-        dto.setMethod(HttpMethodConstants.POST.name());
-        dto.setOriginalValue(JSON.toJSONBytes(request));
-        return dto;
+    public void copyLog(TestPlan testPlan, String operator) {
+        if (testPlan != null) {
+            Project project = projectMapper.selectByPrimaryKey(testPlan.getProjectId());
+            LogDTO dto = new LogDTO(
+                    testPlan.getProjectId(),
+                    project.getOrganizationId(),
+                    testPlan.getId(),
+                    operator,
+                    OperationLogType.ADD.name(),
+                    getLogModule(testPlan),
+                    testPlan.getName());
+            dto.setPath("/test-plan/copy");
+            dto.setMethod(HttpMethodConstants.POST.name());
+            dto.setOriginalValue(JSON.toJSONBytes(testPlan));
+            operationLogService.add(dto);
+        }
     }
 
     /**
@@ -196,11 +192,11 @@ public class TestPlanLogService {
                     .projectId(plan.getProjectId())
                     .organizationId(project.getOrganizationId())
                     .type(requestType)
-                    .module(logModule)
+                    .module(getLogModule(plan))
                     .method(requestMethod)
                     .path(requestUrl)
                     .sourceId(plan.getId())
-                    .content(generateTestPlanSimpleContent(plan, Translator.get(typeKey)))
+                    .content(plan.getName())
                     .originalValue(JSON.toJSONBytes(plan))
                     .createUser(operator)
                     .build().getLogDTO();
@@ -208,24 +204,6 @@ public class TestPlanLogService {
         }
         operationLogService.batchAdd(list);
     }
-
-    /**
-     * 生成计划操作日志内容
-     *
-     * @param testPlan 测试计划
-     * @param type     类型
-     * @return 日志内容
-     */
-    private String generateTestPlanSimpleContent(TestPlan testPlan, String type) {
-        StringBuilder content = new StringBuilder();
-        if (StringUtils.equals(testPlan.getType(), TestPlanConstants.TEST_PLAN_TYPE_GROUP)) {
-            content.append(Translator.getWithArgs("test_plan_group.batch.log", type)).append(StringUtils.SPACE).append(testPlan.getName()).append(StringUtils.SPACE);
-        } else {
-            content.append(Translator.getWithArgs("test_plan.batch.log", type)).append(StringUtils.SPACE).append(testPlan.getName()).append(StringUtils.SPACE);
-        }
-        return content.toString();
-    }
-
 
     /**
      * 批量编辑
@@ -250,7 +228,7 @@ public class TestPlanLogService {
                         testPlan.getId(),
                         null,
                         OperationLogType.UPDATE.name(),
-                        OperationLogModule.TEST_PLAN,
+                        getLogModule(testPlan),
                         testPlan.getName());
                 dto.setPath("/test-plan/batch-edit");
                 dto.setMethod(HttpMethodConstants.POST.name());
@@ -268,7 +246,7 @@ public class TestPlanLogService {
                 .projectId(testPlan.getProjectId())
                 .organizationId(project.getOrganizationId())
                 .type(OperationLogType.UPDATE.name())
-                .module(logModule)
+                .module(getLogModule(testPlan))
                 .method(logInsertModule.getRequestMethod())
                 .path(logInsertModule.getRequestUrl())
                 .sourceId(moveId)
@@ -278,4 +256,11 @@ public class TestPlanLogService {
         operationLogService.add(dto);
     }
 
+    private String getLogModule(TestPlan testPlan) {
+        if (StringUtils.equalsIgnoreCase(testPlan.getStatus(), TestPlanConstants.TEST_PLAN_TYPE_PLAN)) {
+            return OperationLogModule.TEST_PLAN_TEST_PLAN;
+        } else {
+            return OperationLogModule.TEST_PLAN_TEST_PLAN_GROUP;
+        }
+    }
 }

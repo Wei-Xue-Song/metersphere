@@ -6,6 +6,7 @@ import io.metersphere.dto.BugProviderDTO;
 import io.metersphere.plan.constants.TestPlanResourceConfig;
 import io.metersphere.plan.dto.request.*;
 import io.metersphere.plan.dto.response.*;
+import io.metersphere.plan.mapper.ExtTestPlanMapper;
 import io.metersphere.plan.service.TestPlanCaseLogService;
 import io.metersphere.plan.service.TestPlanFunctionalCaseService;
 import io.metersphere.plan.service.TestPlanManagementService;
@@ -27,6 +28,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.shiro.authz.annotation.Logical;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.validation.annotation.Validated;
@@ -47,13 +49,14 @@ public class TestPlanFunctionalCaseController {
     private TestPlanManagementService testPlanManagementService;
     @Resource
     private TestPlanFunctionalCaseService testPlanFunctionalCaseService;
+    @Resource
+    private ExtTestPlanMapper extTestPlanMapper;
 
     @PostMapping(value = "/sort")
     @Operation(summary = "测试计划功能用例-功能用例拖拽排序")
     @RequiresPermissions(PermissionConstants.TEST_PLAN_READ_UPDATE)
     @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
     public TestPlanOperationResponse sortNode(@Validated @RequestBody ResourceSortRequest request) {
-        testPlanManagementService.checkModuleIsOpen(request.getTestCollectionId(), TestPlanResourceConfig.CHECK_TYPE_TEST_PLAN, Collections.singletonList(TestPlanResourceConfig.CONFIG_TEST_PLAN_FUNCTIONAL_CASE));
         return testPlanFunctionalCaseService.sortNode(request, new LogInsertModule(SessionUtils.getUserId(), "/test-plan/functional/case/sort", HttpMethodConstants.POST.name()));
     }
 
@@ -62,23 +65,25 @@ public class TestPlanFunctionalCaseController {
     @RequiresPermissions(PermissionConstants.TEST_PLAN_READ)
     @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
     public Pager<List<TestPlanCasePageResponse>> page(@Validated @RequestBody TestPlanCaseRequest request) {
-        Page<Object> page = PageHelper.startPage(request.getCurrent(), request.getPageSize());
+        Page<Object> page = PageHelper.startPage(request.getCurrent(), request.getPageSize(),
+                StringUtils.isNotBlank(request.getSortString("id", "functional_case")) ? request.getSortString("id", "functional_case") : "test_plan_functional_case.pos asc");
+
         return PageUtils.setPageInfo(page, testPlanFunctionalCaseService.getFunctionalCasePage(request, false));
     }
 
-    @GetMapping("/tree/{testPlanId}")
+    @PostMapping("/tree")
     @Operation(summary = "测试计划-已关联功能用例列表模块树")
     @RequiresPermissions(PermissionConstants.TEST_PLAN_READ)
     @CheckOwner(resourceId = "#testPlanId", resourceType = "test_plan")
-    public List<BaseTreeNode> getTree(@PathVariable String testPlanId) {
-        return testPlanFunctionalCaseService.getTree(testPlanId);
+    public List<BaseTreeNode> getTree(@Validated @RequestBody TestPlanTreeRequest request) {
+        return testPlanFunctionalCaseService.getTree(request);
     }
 
     @PostMapping("/module/count")
     @Operation(summary = "测试计划-已关联功能用例模块数量")
     @RequiresPermissions(PermissionConstants.TEST_PLAN_READ)
     @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
-    public Map<String, Long> moduleCount(@Validated @RequestBody TestPlanCaseRequest request) {
+    public Map<String, Long> moduleCount(@Validated @RequestBody TestPlanCaseModuleRequest request) {
         return testPlanFunctionalCaseService.moduleCount(request);
     }
 
@@ -138,6 +143,7 @@ public class TestPlanFunctionalCaseController {
     @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
     public void run(@Validated @RequestBody TestPlanCaseRunRequest request) {
         testPlanFunctionalCaseService.run(request, new LogInsertModule(SessionUtils.getUserId(), "/test-plan/functional/case/run", HttpMethodConstants.POST.name()));
+        testPlanService.setActualStartTime(request.getTestPlanId());
         testPlanService.refreshTestPlanStatus(request.getTestPlanId());
     }
 
@@ -147,6 +153,7 @@ public class TestPlanFunctionalCaseController {
     @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
     public void batchRun(@Validated @RequestBody TestPlanCaseBatchRunRequest request) {
         testPlanFunctionalCaseService.batchRun(request, new LogInsertModule(SessionUtils.getUserId(), "/test-plan/functional/case/batch/run", HttpMethodConstants.POST.name()));
+        testPlanService.setActualStartTime(request.getTestPlanId());
         testPlanService.refreshTestPlanStatus(request.getTestPlanId());
     }
 
@@ -191,5 +198,14 @@ public class TestPlanFunctionalCaseController {
     public List<UserDTO> getReviewUserList(@PathVariable String projectId, @Schema(description = "查询关键字，根据邮箱和用户名查询")
     @RequestParam(value = "keyword", required = false) String keyword) {
         return testPlanFunctionalCaseService.getExecUserList(projectId, keyword);
+    }
+
+    @PostMapping("/batch/move")
+    @Operation(summary = "测试计划-计划详情-功能用例-批量移动")
+    @RequiresPermissions(PermissionConstants.TEST_PLAN_READ_UPDATE)
+    @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
+    @Log(type = OperationLogType.UPDATE, expression = "#msClass.batchMove(#request)", msClass = TestPlanCaseLogService.class)
+    public void batchMove(@Validated @RequestBody BaseBatchMoveRequest request) {
+        testPlanFunctionalCaseService.batchMove(request);
     }
 }

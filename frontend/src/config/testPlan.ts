@@ -1,5 +1,9 @@
+import { cloneDeep } from 'lodash-es';
+
+import { addCommasToNumber } from '@/utils';
+
 import type { PassRateCountDetail, planStatusType, TestPlanDetail } from '@/models/testPlan/testPlan';
-import type { PlanReportDetail, StatusListType } from '@/models/testPlan/testPlanReport';
+import type { countDetail, PlanReportDetail, StatusListType } from '@/models/testPlan/testPlanReport';
 import { LastExecuteResults } from '@/enums/caseEnum';
 // TODO: 对照后端字段
 // 测试计划详情
@@ -55,12 +59,20 @@ export const defaultExecuteForm = {
   planCommentFileIds: [],
   notifier: [] as string[],
 };
+
+export const defaultCount: countDetail = {
+  success: 0,
+  error: 0,
+  fakeError: 0,
+  block: 0,
+  pending: 0,
+};
 // 报告详情
 export const defaultReportDetail: PlanReportDetail = {
   id: '',
   name: '',
   startTime: 0,
-  executeTime: 0, // 报告执行开始时间
+  createTime: 0, // 报告执行开始时间
   endTime: 0,
   summary: '',
   passThreshold: 0, // 通过阈值
@@ -68,20 +80,16 @@ export const defaultReportDetail: PlanReportDetail = {
   executeRate: 0, // 执行完成率
   bugCount: 0,
   caseTotal: 0,
-  executeCount: {
-    success: 0,
-    error: 0,
-    fakeError: 0,
-    block: 0,
-    pending: 0,
-  },
-  functionalCount: {
-    success: 0,
-    error: 0,
-    fakeError: 0,
-    block: 0,
-    pending: 0,
-  },
+  executeCount: cloneDeep(defaultCount),
+  functionalCount: cloneDeep(defaultCount),
+  apiCaseCount: cloneDeep(defaultCount),
+  apiScenarioCount: cloneDeep(defaultCount),
+  planCount: 0,
+  passCountOfPlan: 0, // 计划通过数量
+  failCountOfPlan: 0, // 计划未通过数量
+  functionalBugCount: 0, // 用例明细bug总数
+  apiBugCount: 0, // 接口用例明细bug总数
+  scenarioBugCount: 0, // 场景用例明细bug总数
 };
 
 export const statusConfig: StatusListType[] = [
@@ -102,15 +110,14 @@ export const statusConfig: StatusListType[] = [
     key: 'SUCCESS',
   },
   // TODO 这个版本不展示误报
-  // {
-  //   label: 'common.fakeError',
-  //   value: 'fakeError',
-  //   color: '#FFC14E',
-  //   class: 'bg-[rgb(var(--warning-6))]',
-  //   rateKey: 'requestFakeErrorRate',
-  //   key: 'FAKE_ERROR',
-  // },
-
+  {
+    label: 'common.fakeError',
+    value: 'fakeError',
+    color: '#FFC14E',
+    class: 'bg-[rgb(var(--warning-6))]',
+    rateKey: 'requestFakeErrorRate',
+    key: 'FAKE_ERROR',
+  },
   {
     label: 'common.block',
     value: 'block',
@@ -128,5 +135,63 @@ export const statusConfig: StatusListType[] = [
     key: 'ERROR',
   },
 ];
+
+export const toolTipConfig = {
+  show: true,
+  trigger: 'item',
+  label: {
+    color: '#959598',
+  },
+  position: 'top',
+  backgroundColor: '#fff',
+  padding: 24,
+  borderWidth: 0,
+  formatter(params: any) {
+    const html = `
+      <div class="w-[144px] flex items-center justify-between">
+      <div class=" flex items-center">
+      <div class="mb-[2px] mr-[8px] h-[6px] w-[6px] rounded-full bg-[${params.color}]" style="background:${
+      params.color
+    }"></div>
+      <div style="color:#959598">${params.name}</div>
+      </div>
+      <div class="text-[#323233] font-medium">${addCommasToNumber(params.value)}</div>
+      </div>
+      `;
+    return html;
+  },
+};
+
+export const commonConfig = {
+  tooltip: {
+    show: false,
+    trigger: 'item',
+  },
+  legend: {
+    show: false,
+  },
+};
+
+export const seriesConfig = {
+  name: '',
+  type: 'pie',
+  radius: ['62%', '80%'],
+  center: ['50%', '50%'],
+  avoidLabelOverlap: false,
+  label: {
+    show: false,
+    position: 'center',
+  },
+  emphasis: {
+    label: {
+      show: false,
+      fontSize: 40,
+      fontWeight: 'bold',
+    },
+  },
+  labelLine: {
+    show: false,
+  },
+};
 
 export default {};

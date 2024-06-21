@@ -904,6 +904,18 @@ export const pathMap: PathMapItem[] = [
                   type: TaskCenterEnum.API_SCENARIO,
                 },
               },
+              {
+                key: 'PROJECT_MANAGEMENT_TASK_CENTER_REAL_TIME_TEST_PLAN', // 项目管理-任务中心-实时任务-接口场景
+                locale: 'project.taskCenter.testPlan',
+                route: '',
+                permission: [],
+                level: MENU_LEVEL[2],
+                routeQuery: {
+                  task: true,
+                  tab: 'real',
+                  type: TaskCenterEnum.TEST_PLAN,
+                },
+              },
             ],
           },
           {
@@ -937,6 +949,18 @@ export const pathMap: PathMapItem[] = [
                   type: TaskCenterEnum.API_IMPORT,
                 },
               },
+              {
+                key: 'PROJECT_MANAGEMENT_TASK_CENTER_TIME_TEST_PLAN', // 项目管理-任务中心-定时任务-测试计划
+                locale: 'project.taskCenter.testPlan',
+                route: '',
+                permission: [],
+                level: MENU_LEVEL[2],
+                routeQuery: {
+                  task: true,
+                  tab: 'timing',
+                  type: TaskCenterEnum.TEST_PLAN,
+                },
+              },
             ],
           },
         ],
@@ -952,8 +976,15 @@ export const pathMap: PathMapItem[] = [
     level: MENU_LEVEL[2],
     children: [
       {
-        key: 'TEST_PLAN_INDEX', // 测试计划-测试计划
-        locale: 'menu.testPlan',
+        key: 'TEST_PLAN_PLAN', // 测试计划-计划
+        locale: 'menu.testPlanShort',
+        route: RouteEnum.TEST_PLAN_INDEX_DETAIL,
+        permission: [],
+        level: MENU_LEVEL[2],
+      },
+      {
+        key: 'TEST_PLAN_GROUP', // 测试计划-计划组
+        locale: 'menu.testPlanGroup',
         route: RouteEnum.TEST_PLAN_INDEX,
         permission: [],
         level: MENU_LEVEL[2],
@@ -964,6 +995,28 @@ export const pathMap: PathMapItem[] = [
         route: RouteEnum.TEST_PLAN_REPORT,
         permission: [],
         level: MENU_LEVEL[2],
+        children: [
+          {
+            key: 'TEST_PLAN_REPORT_TEST_PLAN', // 测试计划报告
+            locale: 'menu.apiTest.reportTestPlan',
+            route: RouteEnum.TEST_PLAN_REPORT_DETAIL,
+            permission: [],
+            level: MENU_LEVEL[2],
+            routeQuery: {
+              type: 'TEST_PLAN',
+            },
+          },
+          {
+            key: 'TEST_PLAN_REPORT_TEST_PLAN_GROUP', // 测试计划组报告
+            locale: 'menu.apiTest.reportTestGroupPlan',
+            route: RouteEnum.TEST_PLAN_REPORT_DETAIL,
+            permission: [],
+            level: MENU_LEVEL[2],
+            routeQuery: {
+              type: 'GROUP',
+            },
+          },
+        ],
       },
     ],
   },

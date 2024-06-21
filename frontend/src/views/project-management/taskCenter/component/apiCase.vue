@@ -398,36 +398,6 @@
       showSelectAll: true,
     }
   );
-  const triggerModeApiCase = ref([]);
-  const triggerModeApiScenario = ref([]);
-
-  const triggerModeFiltersMap = ref<Record<string, string[]>>({
-    API_CASE: triggerModeApiCase.value,
-    API_SCENARIO: triggerModeApiScenario.value,
-  });
-
-  const statusFilterApiCase = ref([]);
-  const statusFilterApiScenario = ref([]);
-
-  const statusFiltersMap = ref<Record<string, string[]>>({
-    API_CASE: statusFilterApiCase.value,
-    API_SCENARIO: statusFilterApiScenario.value,
-  });
-
-  const orgApiCaseFilter = ref([]);
-  const orgApiScenarioFilter = ref([]);
-
-  const orgFiltersMap = ref<Record<string, string[]>>({
-    API_CASE: orgApiCaseFilter.value,
-    API_SCENARIO: orgApiScenarioFilter.value,
-  });
-
-  const projectApiCaseFilter = ref([]);
-  const projectApiScenarioFilter = ref([]);
-  const projectFiltersMap = ref<Record<string, string[]>>({
-    API_CASE: projectApiCaseFilter.value,
-    API_SCENARIO: projectApiScenarioFilter.value,
-  });
 
   function initData() {
     setLoadListParams({
@@ -478,10 +448,7 @@
             condition: {
               keyword: keyword.value,
               filter: {
-                status: statusFiltersMap.value[props.moduleType],
-                triggerMode: triggerModeFiltersMap.value[props.moduleType],
-                organizationIds: orgFiltersMap.value[props.moduleType],
-                projectIds: projectFiltersMap.value[props.moduleType],
+                ...propsRes.value.filter,
               },
             },
           });
@@ -512,7 +479,7 @@
   function stop(record: any) {
     openModal({
       type: 'warning',
-      title: t('project.taskCenter.stopTask', { name: characterLimit(record.name) }),
+      title: t('project.taskCenter.stopTask', { name: characterLimit(record.resourceName) }),
       content: t('project.taskCenter.stopTaskContent'),
       okText: t('project.taskCenter.confirmStop'),
       cancelText: t('common.cancel'),

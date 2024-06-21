@@ -57,12 +57,12 @@
   const featureCaseStore = useFeatureCaseStore();
   const router = useRouter();
   const route = useRoute();
-  // const activeTab = computed(() => featureCaseStore.activeTab);
   const { openModal } = useModal();
   const { t } = useI18n();
 
   const props = defineProps<{
     caseId: string;
+    commentValue: { id: string; name: string }[];
   }>();
 
   const activeComment = ref('caseComment');
@@ -192,14 +192,6 @@
       }
     }
   );
-  // watch(
-  //   () => activeTab.value,
-  //   (val) => {
-  //     if (val === 'comments') {
-  //       getAllCommentList();
-  //     }
-  //   }
-  // );
 
   async function handleUploadImage(file: File) {
     const { data } = await editorUploadFile({
@@ -223,6 +215,10 @@
 
   defineExpose({
     getAllCommentList,
+  });
+
+  onBeforeMount(() => {
+    activeComment.value = props.commentValue.find((item) => Number(item.name) > 0)?.id || 'caseComment';
   });
 </script>
 

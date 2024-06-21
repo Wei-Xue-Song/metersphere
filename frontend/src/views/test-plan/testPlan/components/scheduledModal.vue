@@ -4,6 +4,7 @@
     class="ms-modal-form ms-modal-small"
     title-align="start"
     :mask-closable="false"
+    @close="handleCancel"
   >
     <template #title>
       {{
@@ -132,7 +133,7 @@
 
   const initForm: CreateTask = {
     resourceId: '',
-    cron: '',
+    cron: '0 0 0/1 * * ?',
     enable: false,
     runConfig: { runMode: 'SERIAL' },
   };
@@ -161,7 +162,7 @@
             await configSchedule(params);
             handleCancel();
             emit('handleSuccess');
-            Message.success(t('common.createSuccess'));
+            Message.success(props.taskConfig ? t('common.updateSuccess') : t('common.createSuccess'));
           }
         } catch (error) {
           // eslint-disable-next-line no-console

@@ -40,7 +40,11 @@
                 #{excludeId}
             </foreach>
         </if>
-
+        <if test="!isRepeat and testPlanId != null">
+            AND api_scenario.id not in (
+            select test_plan_api_scenario.api_scenario_id from test_plan_api_scenario where test_plan_api_scenario.test_plan_id = #{testPlanId}
+            )
+        </if>
 
     </select>
     <select id="getIds" resultType="java.lang.String">
@@ -495,8 +499,10 @@
         api_scenario_report.start_time,
         api_scenario_report.create_user,
         api_scenario_report.trigger_mode,
-        api_scenario_report.test_plan_id,
-        api_scenario_report.deleted
+        api_scenario_report.test_plan_scenario_id,
+        api_scenario_report.deleted,
+        api_scenario_report.integrated,
+        api_scenario_report.test_plan_scenario_id as test_plan_id
         from api_scenario_report
         left join api_scenario_record t1 on t1.api_scenario_report_id = api_scenario_report.id
         where
@@ -553,6 +559,11 @@
         FROM api_scenario
         where api_scenario.deleted =#{deleted}
         <include refid="queryWhereCondition"/>
+        <if test="request.testPlanId != null and request.testPlanId != ''">
+            AND api_scenario.id not in (
+            select test_plan_api_scenario.api_scenario_id from test_plan_api_scenario where test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+            )
+        </if>
         GROUP BY api_scenario.module_id
     </select>
 
@@ -597,6 +608,16 @@
         select brc.case_id from bug_relation_case brc where brc.bug_id = #{request.sourceId} and brc.case_type = #{request.sourceType}
         )
         <include refid="queryByAssociateParam"/>
+    </select>
+    <select id="getScenarioByResourceId" resultType="io.metersphere.api.domain.ApiScenario">
+        select api_scenario.* from api_scenario
+        inner join test_plan_api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        where test_plan_api_scenario.id = #{id}
+    </select>
+    <select id="getScenarioByReportId" resultType="io.metersphere.api.domain.ApiScenario">
+        select api_scenario.* from api_scenario
+        inner join test_plan_report_api_scenario tpras on api_scenario.id = tpras.api_scenario_id
+        where tpras.id = #{reportId}
     </select>
 
     <sql id="report_filters">

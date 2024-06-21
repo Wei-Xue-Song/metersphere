@@ -1,12 +1,15 @@
 <template>
-  <MsFolderAll
+  <TreeFolderAll
+    v-model:selectedProtocols="selectedProtocols"
     :active-folder="activeFolder"
-    :folder-name="t('caseManagement.caseReview.allCases')"
+    :folder-name="props.folderName"
     :all-count="allCount"
+    :show-expand-api="false"
+    :not-show-operation="props.activeTab !== 'API'"
     @set-active-folder="setActiveFolder"
-  >
-  </MsFolderAll>
-  <a-divider class="my-[8px]" />
+    @selected-protocols-change="selectedProtocolsChange"
+  />
+  <a-divider class="my-[8px] mt-0" />
   <div class="mb-[8px] flex items-center gap-[8px]">
     <a-input
       v-model:model-value="moduleKeyword"
@@ -14,7 +17,7 @@
       allow-clear
       :max-length="255"
     />
-    <a-tooltip :content="isExpandAll ? t('apiScenario.collapseAll') : t('apiScenario.expandAllStep')">
+    <a-tooltip :content="isExpandAll ? t('common.collapseAllSubModule') : t('common.expandAllSubModule')">
       <a-button
         type="outline"
         class="expand-btn arco-btn-outline--secondary"
@@ -57,9 +60,9 @@
   import { ref } from 'vue';
   import { useVModel } from '@vueuse/core';
 
-  import MsFolderAll from '@/components/business/ms-folder-all/index.vue';
   import MsTree from '@/components/business/ms-tree/index.vue';
   import type { MsTreeNodeData } from '@/components/business/ms-tree/types';
+  import TreeFolderAll from '@/views/api-test/components/treeFolderAll.vue';
 
   import { useI18n } from '@/hooks/useI18n';
   import { mapTree } from '@/utils';
@@ -79,15 +82,18 @@
     getModulesApiType: CaseModulesApiTypeEnum[keyof CaseModulesApiTypeEnum];
     activeTab: keyof typeof CaseLinkEnum;
     extraModulesParams?: Record<string, any>; // 获取模块树请求额外参数
+    showType?: string;
+    folderName: string;
   }>();
 
   const emit = defineEmits<{
     (e: 'folderNodeSelect', ids: string[], _offspringIds: string[], nodeName?: string): void;
-    (e: 'init', params: ModuleTreeNode[]): void;
+    (e: 'init', params: ModuleTreeNode[], selectedProtocols?: string[]): void;
+    (e: 'changeProtocol', selectedProtocols: string[]): void;
+    (e: 'update:selectedKeys', selectedKeys: string[]): void;
   }>();
 
   const selectedKeys = useVModel(props, 'selectedKeys', emit);
-
   const moduleKeyword = ref('');
   const activeFolder = ref<string>('all');
   const allCount = ref(0);
@@ -97,7 +103,7 @@
 
   const virtualListProps = computed(() => {
     return {
-      height: 'calc(100vh - 408px)',
+      height: 'calc(100vh - 180px)',
       threshold: 200,
       fixedSize: true,
       buffer: 15, // 缓冲区默认 10 的时候，虚拟滚动的底部 padding 计算有问题
@@ -106,7 +112,7 @@
 
   function setActiveFolder(id: string) {
     activeFolder.value = id;
-    emit('folderNodeSelect', [id], [], t('caseManagement.featureCase.allCase'));
+    emit('folderNodeSelect', [id], [], props.folderName);
   }
 
   /**
@@ -122,29 +128,42 @@
     emit('folderNodeSelect', _selectedKeys as string[], offspringIds, node.name);
   }
 
+  const selectedProtocols = ref<string[]>([]);
   /**
    * 初始化模块树
    */
-  async function initModules() {
+  async function initModules(setDefault = false) {
     try {
       moduleLoading.value = true;
-      const res = await getModuleTreeFunc(props.getModulesApiType, props.activeTab, {
+      const getModuleParams = {
         projectId: props.currentProject,
         ...props.extraModulesParams,
-      });
+        protocols:
+          props.activeTab === CaseLinkEnum.API && props.showType === 'API' ? selectedProtocols.value : undefined,
+      };
+
+      const res = await getModuleTreeFunc(props.getModulesApiType, props.activeTab, getModuleParams);
       caseTree.value = mapTree<ModuleTreeNode>(res, (node) => {
         return {
           ...node,
           count: props.modulesCount?.[node.id] || 0,
         };
       });
-      emit('init', caseTree.value);
+      if (setDefault) {
+        setActiveFolder('all');
+      }
+      emit('init', caseTree.value, selectedProtocols.value);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.log(error);
     } finally {
       moduleLoading.value = false;
     }
+  }
+
+  function selectedProtocolsChange() {
+    emit('changeProtocol', selectedProtocols.value);
+    initModules();
   }
 
   /**
@@ -163,17 +182,20 @@
     }
   );
 
-  watchEffect(() => {
-    if (props.currentProject) {
-      initModules();
-    }
-  });
-
   watch(
-    () => props.activeTab,
+    () => props.showType,
     (val) => {
       if (val) {
-        initModules();
+        selectedProtocolsChange();
+      }
+    }
+  );
+
+  watch(
+    () => props.currentProject,
+    (val) => {
+      if (val) {
+        initModules(true);
       }
     }
   );

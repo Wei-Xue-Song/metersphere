@@ -28,7 +28,7 @@
         <guava.version>33.0.0-jre</guava.version>
         <pagehelper.version>6.1.0</pagehelper.version>
         <metersphere-jmeter-functions.version>3.0</metersphere-jmeter-functions.version>
-        <metersphere-jmeter-assertions.version>1.0.2</metersphere-jmeter-assertions.version>
+        <metersphere-jmeter-assertions.version>3.0</metersphere-jmeter-assertions.version>
         <quartz-starter.version>1.0.7</quartz-starter.version>
         <redisson-starter.version>3.30.0</redisson-starter.version>
         <mybatis-starter.version>3.0.3</mybatis-starter.version>
@@ -83,6 +83,9 @@
         <!-- 用于解析 ${__jexl2} 和 ${__jexl3} 函数变量 -->
         <commons-jexl.version>2.1.1</commons-jexl.version>
         <commons-jexl3.version>3.3</commons-jexl3.version>
+        <revision>3.x</revision>
+        <monitoring-engine.revision>3.0</monitoring-engine.revision>
+
     </properties>
 
     <modules>
@@ -164,6 +167,7 @@
                         <exclude>io/metersphere/*/job/**</exclude>
                         <exclude>io/metersphere/system/notice/**</exclude>
                         <exclude>io/metersphere/system/schedule/**</exclude>
+                        <exclude>io/metersphere/system/security/**</exclude>
                     </excludes>
                 </configuration>
                 <executions>

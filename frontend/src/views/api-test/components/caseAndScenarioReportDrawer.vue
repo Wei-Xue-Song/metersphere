@@ -9,7 +9,7 @@
     show-full-screen
   >
     <template #tbutton>
-      <a-dropdown position="br" @select="shareHandler">
+      <a-dropdown v-if="!props.doNotShowShare" position="br" @select="shareHandler">
         <MsButton
           v-permission="['PROJECT_API_REPORT:READ+SHARE']"
           type="icon"
@@ -28,13 +28,18 @@
         </template>
       </a-dropdown>
     </template>
-    <CaseReportCom v-if="!props.isScenario" :detail-info="reportStepDetail" />
-    <ScenarioCom v-else :detail-info="reportStepDetail" />
+    <CaseReportCom
+      v-if="!props.isScenario"
+      :detail-info="reportStepDetail"
+      :get-report-step-detail="props.getReportStepDetail"
+    />
+    <ScenarioCom v-else :detail-info="reportStepDetail" :get-report-step-detail="props.getReportStepDetail" />
   </MsDrawer>
 </template>
 
 <script setup lang="ts">
   import { ref } from 'vue';
+  import { useRoute } from 'vue-router';
   import { useClipboard } from '@vueuse/core';
   import { Message } from '@arco-design/web-vue';
 
@@ -53,11 +58,15 @@
   const props = defineProps<{
     reportId: string;
     isScenario?: boolean;
+    doNotShowShare?: boolean; // 不展示分享按钮
+    reportDetail?: (...args: any) => Promise<any>; // 获取报告接口
+    getReportStepDetail?: (...args: any) => Promise<any>; // 获取步骤的详情内容接口
   }>();
 
   const appStore = useAppStore();
   const { t } = useI18n();
   const { copy, isSupported } = useClipboard({ legacy: true });
+  const route = useRoute();
 
   const innerVisible = defineModel<boolean>('visible', {
     required: true,
@@ -107,6 +116,10 @@
   });
   async function getReportDetail() {
     try {
+      if (props.reportDetail) {
+        reportStepDetail.value = await props.reportDetail(props.reportId, route.query.shareId as string | undefined);
+        return;
+      }
       if (props.isScenario) {
         reportStepDetail.value = await reportScenarioDetail(props.reportId);
       } else {
@@ -176,6 +189,8 @@
     }
   }
   onMounted(() => {
-    getTime();
+    if (!props.doNotShowShare) {
+      getTime();
+    }
   });
 </script>

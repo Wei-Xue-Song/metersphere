@@ -26,6 +26,10 @@ import io.metersphere.api.service.definition.ApiTestCaseService;
 import io.metersphere.api.service.scenario.ApiScenarioReportService;
 import io.metersphere.api.service.scenario.ApiScenarioService;
 import io.metersphere.api.utils.ApiDataUtils;
+import io.metersphere.plan.domain.TestPlanApiScenario;
+import io.metersphere.plan.domain.TestPlanExample;
+import io.metersphere.plan.mapper.TestPlanApiScenarioMapper;
+import io.metersphere.plan.mapper.TestPlanMapper;
 import io.metersphere.plugin.api.spi.AbstractMsTestElement;
 import io.metersphere.project.api.assertion.MsResponseCodeAssertion;
 import io.metersphere.project.api.assertion.MsScriptAssertion;
@@ -47,6 +51,7 @@ import io.metersphere.sdk.file.FileRequest;
 import io.metersphere.sdk.mapper.EnvironmentGroupMapper;
 import io.metersphere.sdk.mapper.EnvironmentMapper;
 import io.metersphere.sdk.util.BeanUtils;
+import io.metersphere.sdk.util.CommonBeanFactory;
 import io.metersphere.sdk.util.JSON;
 import io.metersphere.system.base.BaseTest;
 import io.metersphere.system.controller.handler.ResultHolder;
@@ -178,6 +183,10 @@ public class ApiScenarioControllerTests extends BaseTest {
     private ApiScenarioReportService scenarioReportService;
     @Resource
     private ApiScenarioCsvStepMapper apiScenarioCsvStepMapper;
+    @Resource
+    private TestPlanMapper testPlanMapper;
+    @Resource
+    private TestPlanApiScenarioMapper testPlanApiScenarioMapper;
 
     private static String fileMetadataId;
     private static String fileMetadataStepId;
@@ -343,16 +352,7 @@ public class ApiScenarioControllerTests extends BaseTest {
         initTestData();
 
         // @@请求成功
-        ApiScenarioAddRequest request = new ApiScenarioAddRequest();
-        request.setProjectId(DEFAULT_PROJECT_ID);
-        request.setDescription("desc");
-        request.setName("test name");
-        request.setModuleId("default");
-        request.setGrouped(false);
-        request.setEnvironmentId(envId);
-        request.setTags(List.of("tag1", "tag2"));
-        request.setPriority("P0");
-        request.setStatus(ApiScenarioStatus.COMPLETED.name());
+        ApiScenarioAddRequest request = getApiScenarioAddRequest();
         List<ApiScenarioStepRequest> steps = getApiScenarioStepRequests();
         Map<String, Object> steptDetailMap = new HashMap<>();
         steptDetailMap.put(steps.get(1).getId(), getMsHttpElementParam());
@@ -403,6 +403,20 @@ public class ApiScenarioControllerTests extends BaseTest {
         requestPostPermissionTest(PermissionConstants.PROJECT_API_SCENARIO_ADD, DEFAULT_ADD, request);
     }
 
+    public static ApiScenarioAddRequest getApiScenarioAddRequest() {
+        ApiScenarioAddRequest request = new ApiScenarioAddRequest();
+        request.setProjectId(DEFAULT_PROJECT_ID);
+        request.setDescription("desc");
+        request.setName("test name");
+        request.setModuleId("default");
+        request.setGrouped(false);
+        request.setEnvironmentId(envId);
+        request.setTags(List.of("tag1", "tag2"));
+        request.setPriority("P0");
+        request.setStatus(ApiScenarioStatus.COMPLETED.name());
+        return request;
+    }
+
     private Object getMsHttpElementParam() {
         return getMsHttpElementStr(MsHTTPElementTest.getMsHttpElement());
     }
@@ -446,7 +460,15 @@ public class ApiScenarioControllerTests extends BaseTest {
         }
     }
 
-    private ScenarioConfig getScenarioConfig() {
+    public ScenarioConfig getScenarioConfig() {
+        ScenarioConfig scenarioConfig = getSimpleScenarioConfig();
+        ScenarioVariable scenarioVariable = new ScenarioVariable();
+        scenarioVariable.setCsvVariables(getCsvVariables());
+        scenarioConfig.setVariable(scenarioVariable);
+        return scenarioConfig;
+    }
+
+    public ScenarioConfig getSimpleScenarioConfig() {
         ScenarioConfig scenarioConfig = new ScenarioConfig();
         MsAssertionConfig msAssertionConfig = new MsAssertionConfig();
         MsScriptAssertion scriptAssertion = new MsScriptAssertion();
@@ -462,9 +484,6 @@ public class ApiScenarioControllerTests extends BaseTest {
         scenarioOtherConfig.setFailureStrategy(ScenarioOtherConfig.FailureStrategy.CONTINUE.name());
         scenarioOtherConfig.setEnableCookieShare(true);
         scenarioConfig.setOtherConfig(scenarioOtherConfig);
-        ScenarioVariable scenarioVariable = new ScenarioVariable();
-        scenarioVariable.setCsvVariables(getCsvVariables());
-        scenarioConfig.setVariable(scenarioVariable);
         return scenarioConfig;
     }
 
@@ -480,7 +499,7 @@ public class ApiScenarioControllerTests extends BaseTest {
         fileMetadataId = fileMetadataService.upload(fileUploadRequest, "admin", file);
     }
 
-    public List<CsvVariable> getCsvVariables() {
+    public static List<CsvVariable> getCsvVariables() {
         List<CsvVariable> csvVariables = new ArrayList<>();
         CsvVariable csvVariable = new CsvVariable();
         csvVariable.setId(UUID.randomUUID().toString());
@@ -498,6 +517,7 @@ public class ApiScenarioControllerTests extends BaseTest {
         csvVariable.setName("csv-关联的");
         file = new ApiFile();
         file.setFileId(fileMetadataId);
+        FileMetadataService fileMetadataService = CommonBeanFactory.getBean(FileMetadataService.class);
         FileMetadata fileMetadata = fileMetadataService.selectById(fileMetadataId);
         file.setFileName(fileMetadata.getOriginalName());
         file.setLocal(false);
@@ -1177,9 +1197,10 @@ public class ApiScenarioControllerTests extends BaseTest {
         requestGetPermissionTest(PermissionConstants.PROJECT_API_SCENARIO_EXECUTE, RUN_REAL_TIME, addApiScenario.getId(), "reportId");
     }
 
+    @Test
     @Order(6)
     public void batchRun() throws Exception {
-        mockPost("/api/run", "");
+        mockPost("/api/batch/run", "");
 
         ApiScenarioBatchRunRequest request = new ApiScenarioBatchRunRequest();
         List<String> ids = new ArrayList<>();
@@ -2631,6 +2652,20 @@ public class ApiScenarioControllerTests extends BaseTest {
         ApiScenario first = apiScenarioMapper.selectByExample(new ApiScenarioExample()).getFirst();
         List<ApiScenarioReport> reports = new ArrayList<>();
         List<ApiScenarioRecord> records = new ArrayList<>();
+
+        String planId = testPlanMapper.selectByExample(new TestPlanExample()).getFirst().getId();
+        TestPlanApiScenario testPlanApiScenario = new TestPlanApiScenario();
+        testPlanApiScenario.setTestPlanId(first.getId());
+        testPlanApiScenario.setId(IDGenerator.nextStr());
+        testPlanApiScenario.setApiScenarioId(first.getId());
+        testPlanApiScenario.setCreateUser("admin");
+        testPlanApiScenario.setCreateTime(System.currentTimeMillis());
+        testPlanApiScenario.setLastExecTime(System.currentTimeMillis());
+        testPlanApiScenario.setLastExecReportId(IDGenerator.nextStr());
+        testPlanApiScenario.setLastExecResult(ExecStatus.SUCCESS.name());
+        testPlanApiScenario.setPos(1024l);
+        testPlanApiScenario.setTestPlanCollectionId(planId);
+        testPlanApiScenarioMapper.insert(testPlanApiScenario);
         for (int i = 0; i < 10; i++) {
             ApiScenarioReport apiReport = new ApiScenarioReport();
             apiReport.setId(IDGenerator.nextStr());
@@ -2646,6 +2681,7 @@ public class ApiScenarioControllerTests extends BaseTest {
             if (i % 2 == 0) {
                 apiReport.setStatus(ReportStatus.SUCCESS.name());
             } else {
+                apiReport.setTestPlanScenarioId(testPlanApiScenario.getId());
                 apiReport.setStatus(ReportStatus.ERROR.name());
             }
             apiReport.setTriggerMode("api-trigger-mode" + i);
@@ -2832,6 +2868,16 @@ public class ApiScenarioControllerTests extends BaseTest {
         scenarioSystemRequest.setProtocols(List.of("HTTP"));
         scenarioSystemRequest.setModuleIds(List.of("test-default"));
         ApiScenarioSystemRequest apiScenarioSystemRequest = new ApiScenarioSystemRequest();
+        apiScenarioSystemRequest.setApiRequest(scenarioSystemRequest);
+        apiScenarioSystemRequest.setCaseRequest(scenarioSystemRequest);
+        apiScenarioSystemRequest.setScenarioRequest(scenarioSystemRequest);
+        apiScenarioSystemRequest.setRefType(ApiScenarioStepRefType.COPY.name());
+        this.requestPostWithOkAndReturn("/get/system-request", apiScenarioSystemRequest);
+
+        scenarioSystemRequest = new ScenarioSystemRequest();
+        scenarioSystemRequest.setProjectId(DEFAULT_PROJECT_ID);
+        scenarioSystemRequest.setModuleIds(List.of("test-default"));
+        apiScenarioSystemRequest = new ApiScenarioSystemRequest();
         apiScenarioSystemRequest.setApiRequest(scenarioSystemRequest);
         apiScenarioSystemRequest.setCaseRequest(scenarioSystemRequest);
         apiScenarioSystemRequest.setScenarioRequest(scenarioSystemRequest);

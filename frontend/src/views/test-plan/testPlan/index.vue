@@ -35,11 +35,7 @@
                 <div class="folder-count">({{ modulesCount.all || 0 }})</div></div
               >
               <div class="ml-auto flex items-center">
-                <a-tooltip
-                  :content="
-                    isExpandAll ? t('testPlan.testPlanIndex.collapseAll') : t('testPlan.testPlanIndex.expandAll')
-                  "
-                >
+                <a-tooltip :content="isExpandAll ? t('common.collapseAllSubModule') : t('common.expandAllSubModule')">
                   <MsButton type="icon" status="secondary" class="!mr-0 p-[4px]" position="top" @click="expandHandler">
                     <MsIcon :type="isExpandAll ? 'icon-icon_folder_collapse1' : 'icon-icon_folder_expansion1'" />
                   </MsButton>
@@ -94,6 +90,7 @@
             :node-name="nodeName"
             @init="initModulesCount"
             @edit="handleEdit"
+            @new="createTestPlan"
           />
         </div>
       </template>
@@ -273,6 +270,14 @@
   }
   function dragUpdate() {
     planTableRef.value?.emitTableParams();
+  }
+
+  function createTestPlan(type: string) {
+    if (type === 'group') {
+      showPlanGroupModel.value = true;
+    } else {
+      showPlanDrawer.value = true;
+    }
   }
 </script>
 

@@ -11,10 +11,9 @@
       <div class="float-left">
         <a-select
           v-if="props?.moduleOptions"
-          v-model:model-value="caseType"
+          v-model="caseType"
           class="ml-2 max-w-[100px]"
           :placeholder="t('caseManagement.featureCase.PleaseSelect')"
-          @change="changeCaseTypeHandler"
         >
           <a-option v-for="item of props?.moduleOptions" :key="item.value" :value="item.value">
             {{ t(item.label) }}
@@ -57,7 +56,7 @@
             allow-clear
             :max-length="255"
           />
-          <a-tooltip :content="isExpandAll ? t('apiScenario.collapseAll') : t('ms.comment.expandAllModule')">
+          <a-tooltip :content="isExpandAll ? t('common.collapseAllSubModule') : t('common.expandAllSubModule')">
             <a-button
               type="outline"
               class="expand-btn arco-btn-outline--secondary"
@@ -77,7 +76,7 @@
           </div>
           <!-- <div class="ml-auto flex items-center">
             <a-tooltip
-              :content="isExpandAll ? t('project.fileManagement.collapseAll') : t('project.fileManagement.expandAll')"
+              :content="isExpandAll ? t('common.collapseAllSubModule') : t('common.expandAllSubModule')"
             >
               <MsButton type="icon" status="secondary" class="!mr-0 p-[4px]" @click="expandHandler">
                 <MsIcon :type="isExpandAll ? 'icon-icon_folder_collapse1' : 'icon-icon_folder_expansion1'" />
@@ -212,7 +211,6 @@
 
   import { CustomTypeMaps, MsAdvanceFilter } from '@/components/pure/ms-advance-filter';
   import { FilterFormItem, FilterType } from '@/components/pure/ms-advance-filter/type';
-  import MsButton from '@/components/pure/ms-button/index.vue';
   import MsDrawer from '@/components/pure/ms-drawer/index.vue';
   import MsIcon from '@/components/pure/ms-icon-font/index.vue';
   import MsBaseTable from '@/components/pure/ms-table/base-table.vue';
@@ -789,18 +787,20 @@
     }
   );
 
-  function changeCaseTypeHandler(
-    value: string | number | boolean | Record<string, any> | (string | number | boolean | Record<string, any>)[]
-  ) {
-    caseType.value = value as keyof typeof CaseLinkEnum;
-    if (!props.hideProjectSelect) {
-      initProjectList(true);
+  watch(
+    () => caseType.value,
+    (val) => {
+      if (val) {
+        if (!props.hideProjectSelect) {
+          initProjectList(true);
+        }
+        resetFilterParams();
+        initModules(true);
+        searchCase();
+        initFilter();
+      }
     }
-    resetFilterParams();
-    initModules(true);
-    searchCase();
-    initFilter();
-  }
+  );
 
   watch(
     () => innerProject.value,

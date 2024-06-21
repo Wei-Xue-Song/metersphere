@@ -13,10 +13,10 @@
         WHERE test_plan_id = #{testPlanId}
         ORDER BY pos ASC
     </select>
-    <select id="getMaxPosByTestPlanId" resultType="java.lang.Long">
+    <select id="getMaxPosByRangeId" resultType="java.lang.Long">
         SELECT max(pos)
         FROM test_plan_api_scenario
-        WHERE test_plan_id = #{0}
+        WHERE test_plan_collection_Id = #{0}
     </select>
     <select id="getIdByParam"
             parameterType="io.metersphere.plan.dto.ResourceSelectParam"
@@ -54,7 +54,7 @@
             resultType="io.metersphere.project.dto.DropNode">
         SELECT id, pos
         FROM test_plan_api_scenario
-        WHERE test_plan_id = #{parentId}
+        WHERE test_plan_collection_id = #{parentId}
         <if test="operator == 'moreThan'">
             AND pos &gt; #{pos}
         </if>
@@ -82,4 +82,405 @@
         WHERE t.test_plan_id = #{0}
           AND a.deleted = false
     </select>
+
+    <select id="relateApiScenarioList" resultType="io.metersphere.plan.dto.response.TestPlanApiScenarioPageResponse">
+        SELECT
+        test_plan_api_scenario.id,
+        test_plan_api_scenario.test_plan_collection_id,
+        api_scenario.num,
+        api_scenario.name,
+        api_scenario.priority,
+        api_scenario.project_id,
+        api_scenario.create_user,
+        api_scenario.status,
+        api_scenario.id as apiScenarioId,
+        test_plan_api_scenario.create_time,
+        test_plan_api_scenario.environment_id,
+        api_scenario.module_id,
+        test_plan_api_scenario.last_exec_result,
+        test_plan_api_scenario.execute_user,
+        test_plan_api_scenario.last_exec_time,
+        test_plan_api_scenario.last_exec_report_id,
+        test_plan_collection.name as testPlanCollectionName
+        FROM
+        test_plan_api_scenario
+        inner join api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        inner join test_plan_collection on test_plan_collection.id = test_plan_api_scenario.test_plan_collection_id
+        WHERE api_scenario.deleted =#{deleted}
+        and test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+        <include refid="queryApiScenarioWhereCondition"/>
+    </select>
+
+    <sql id="queryApiScenarioWhereCondition">
+        <if test="request.keyword != null and request.keyword != ''">
+            and (
+            api_scenario.num like concat('%', #{request.keyword},'%')
+            or api_scenario.name like concat('%', #{request.keyword},'%')
+            or api_scenario.tags like concat('%', #{request.keyword},'%')
+            )
+        </if>
+        <if test="request.scenarioId != null and request.scenarioId != ''">
+            and api_scenario.id = #{request.scenarioId}
+        </if>
+        <if test="request.projectId != null and request.projectId != ''">
+            and api_scenario.project_id = #{request.projectId}
+        </if>
+        <if test="request.moduleIds != null and request.moduleIds.size() > 0">
+            and api_scenario.module_id in
+            <foreach collection="request.moduleIds" item="nodeId" separator="," open="(" close=")">
+                <choose>
+                    <when test="nodeId.contains('_root')">
+                        'root'
+                    </when>
+                    <otherwise>
+                        #{nodeId}
+                    </otherwise>
+                </choose>
+            </foreach>
+        </if>
+        <if test="request.collectionId != null and request.collectionId != ''">
+            and test_plan_api_scenario.test_plan_collection_id = #{request.collectionId}
+        </if>
+        <include refid="filters">
+            <property name="filter" value="request.filter"/>
+        </include>
+
+        <if test="request.combine != null and request.combine != ''">
+            <include refid="combine">
+                <property name="condition" value="request.combine"/>
+                <property name="name" value="request.name"/>
+                <property name="ObjectTags" value="request.combine.tags"/>
+            </include>
+        </if>
+
+        <include refid="queryVersionCondition">
+            <property name="versionTable" value="api_scenario"/>
+        </include>
+    </sql>
+
+    <sql id="filters">
+        <if test="${filter} != null and ${filter}.size() > 0">
+            <foreach collection="${filter}.entrySet()" index="key" item="values">
+                <if test="values != null and values.size() > 0">
+                    <choose>
+                        <when test="key=='lastReportStatus' and values.size() != 7 ">
+                            <!--    取值范围在7个状态（成功、失败、误报、停止、执行中、重跑中、排队中）内选。如果全部全选，则不用拼接这条语句-->
+                            <if test="values.contains('PENDING')">
+                                and (
+                                (api_scenario.last_report_status is null or api_scenario.last_report_status = '')
+                                or api_scenario.last_report_status in
+                                <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                                )
+                            </if>
+                            <if test="!values.contains('PENDING')">
+                                and api_scenario.last_report_status in
+                                <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                            </if>
+                        </when>
+                        <when test="key=='lastExecResult'">
+                            and test_plan_api_scenario.last_exec_result in
+                            <foreach collection="values" item="value" separator="," open="(" close=")">
+                                #{value}
+                            </foreach>
+                        </when>
+                        <when test="key=='status'">
+                            and api_scenario.status in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                        </when>
+                        <when test="key=='createUser'">
+                            and api_scenario.create_user in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                        </when>
+                        <when test="key=='updateUser'">
+                            and api_scenario.update_user in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                        </when>
+                        <when test="key=='deleteUser'">
+                            and api_scenario.delete_user in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                        </when>
+                        <when test="key=='versionId'">
+                            and api_scenario.version_id in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                        </when>
+                        <when test="key=='priority'">
+                            and api_scenario.priority in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                        </when>
+                        <when test="key.startsWith('custom_single')">
+                            and api_scenario.id in (
+                            select api_id from api_definition_custom_field where concat('custom_single_', field_id) =
+                            #{key}
+                            and trim(both '"' from `value`) in
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterInWrapper"/>
+                            )
+                        </when>
+                        <when test="key.startsWith('custom_multiple')">
+                            and api_scenario.id in (
+                            select api_id from api_definition_custom_field where concat('custom_multiple_', field_id) =
+                            #{key}
+                            and
+                            <include refid="io.metersphere.system.mapper.BaseMapper.filterMultipleWrapper"/>
+                            )
+                        </when>
+                    </choose>
+                </if>
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="combine">
+        <if test='${condition}.name != null and (${name} == null or ${name} == "")'>
+            and api_scenario.name
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.name"/>
+            </include>
+        </if>
+
+        <if test='${condition}.id != null'>
+            and api_scenario.num
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.id"/>
+            </include>
+        </if>
+
+        <if test="${condition}.updateTime != null">
+            and api_scenario.update_time
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.updateTime"/>
+            </include>
+        </if>
+
+        <if test="${condition}.createTime != null">
+            and api_scenario.create_time
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.createTime"/>
+            </include>
+        </if>
+
+        <if test="${condition}.status != null">
+            and api_scenario.status
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.status"/>
+            </include>
+        </if>
+
+        <if test='${condition}.tags != null and ${ObjectTags}.operator == "not like"'>
+            and (api_scenario.tags is null or api_scenario.tags
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.tags"/>
+            </include>
+            )
+        </if>
+
+        <if test='${condition}.tags != null and ${ObjectTags}.operator == "like"'>
+            and api_scenario.tags
+            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                <property name="object" value="${condition}.tags"/>
+            </include>
+        </if>
+
+        <if test="${condition}.customs != null and ${condition}.customs.size() > 0">
+            <foreach collection="${condition}.customs" item="custom" separator="" open="" close="">
+                <if test="custom.value != ''">
+                    <if test='custom.operator == "not like" or custom.operator == "not in"'>
+                        and api_scenario.id not in (
+                    </if>
+                    <if test='custom.operator != "not like" and custom.operator != "not in"'>
+                        and api_scenario.id in (
+                    </if>
+                    select api_id from api_definition_custom_field where field_id = #{custom.id}
+                    <choose>
+                        <when test="custom.type == 'TEXTAREA' or custom.operator == 'current user'">
+                            and `value`
+                            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                                <property name="object" value="custom"/>
+                            </include>
+                        </when>
+                        <when test="custom.type == 'MULTIPLE_MEMBER' or custom.type == 'CHECKBOX' or custom.type == 'MULTIPLE_SELECT'">
+                            and ${custom.value}
+                        </when>
+                        <when test="custom.type == 'DATE' or custom.type == 'DATETIME'">
+                            and left(replace(unix_timestamp(trim(both '"' from `value`)), '.', ''), 13)
+                            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                                <property name="object" value="custom"/>
+                            </include>
+                        </when>
+                        <otherwise>
+                            and trim(both '"' from `value`)
+                            <include refid="io.metersphere.system.mapper.BaseMapper.condition">
+                                <property name="object" value="custom"/>
+                            </include>
+                        </otherwise>
+                    </choose>
+                    )
+                </if>
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="queryVersionCondition">
+        <if test="request.versionId != null and request.versionId != ''">
+            and ${versionTable}.version_id = #{request.versionId}
+        </if>
+        <if test="request.refId != null and request.refId != ''">
+            and ${versionTable}.ref_id = #{request.refId}
+        </if>
+        <if test="request.versionId == null and request.refId == null and request.scenarioId == null">
+            AND ${versionTable}.latest = 1
+        </if>
+    </sql>
+
+
+    <select id="countModuleIdByRequest"  resultType="io.metersphere.functional.dto.FunctionalCaseModuleCountDTO">
+        SELECT CASE WHEN api_scenario.module_id = 'root' THEN CONCAT(api_scenario.project_id, '_', api_scenario.module_id) ELSE api_scenario.module_id END AS moduleId,
+               count(api_scenario.id) AS dataCount, api_scenario.project_id AS projectId, project.name AS projectName
+        FROM test_plan_api_scenario
+        INNER JOIN api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        INNER JOIN project ON api_scenario.project_id = project.id
+        WHERE test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+        AND api_scenario.deleted = #{deleted}
+        <include refid="queryApiScenarioWhereCondition"/>
+        GROUP BY moduleId
+    </select>
+
+    <select id="caseCount"
+            resultType="java.lang.Long">
+        SELECT count(api_scenario.id)
+        FROM test_plan_api_scenario
+        INNER JOIN api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        WHERE test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+        AND api_scenario.deleted = #{deleted}
+        <include refid="queryApiScenarioWhereCondition"/>
+    </select>
+
+    <select id="selectIdByProjectIdAndTestPlanId" resultType="java.lang.String">
+        SELECT asm.id, asm.project_id
+        FROM api_scenario_module asm
+        WHERE asm.id IN (
+            SELECT api_scenario.module_id FROM api_scenario LEFT JOIN test_plan_api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id WHERE test_plan_api_scenario.test_plan_id = #{testPlanId} AND api_scenario.deleted = false and api_scenario.project_id = #{projectId}
+        )
+    </select>
+
+    <select id="collectionCountByRequest" resultType="io.metersphere.project.dto.ModuleCountDTO">
+        SELECT
+            test_plan_api_scenario.test_plan_collection_id AS moduleId,
+            count( test_plan_api_scenario.id ) AS dataCount
+        FROM
+            api_scenario
+                INNER JOIN test_plan_api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        WHERE
+            api_scenario.deleted = FALSE
+          AND test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+        <include refid="queryApiScenarioWhereCondition"/>
+        GROUP BY
+            test_plan_api_scenario.test_plan_collection_id
+    </select>
+
+    <select id="selectRootIdByTestPlanId" resultType="io.metersphere.functional.dto.ProjectOptionDTO">
+        SELECT api_scenario.module_id as id, api_scenario.project_id as name, p.name as projectName
+        FROM test_plan_api_scenario
+                 INNER JOIN api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+                 LEFT JOIN project p ON api_scenario.project_id = p.id
+        WHERE test_plan_api_scenario.test_plan_id = #{testPlanId}
+          AND api_scenario.deleted = false
+        ORDER BY api_scenario.pos
+    </select>
+
+    <select id="selectBaseByProjectIdAndTestPlanId" resultType="io.metersphere.plan.dto.ApiScenarioModuleDTO">
+        SELECT asm.id, asm.project_id, p.name as projectName
+        FROM api_scenario_module asm
+                 LEFT JOIN project p ON asm.project_id = p.id
+        WHERE asm.id IN
+              (SELECT api_scenario.module_id FROM api_scenario LEFT JOIN test_plan_api_scenario ON api_scenario.id = test_plan_api_scenario.api_scenario_id WHERE test_plan_api_scenario.test_plan_id = #{testPlanId} AND api_scenario.deleted = false)
+        ORDER BY pos
+    </select>
+
+    <select id="getPlanApiScenarioByIds" resultType="io.metersphere.plan.domain.TestPlanApiScenario">
+        select tpas.test_plan_id testPlanId, tpas.api_scenario_id apiScenarioId, tpas.last_exec_result lastExecResult
+        from test_plan_api_scenario tpas join api_scenario asce on asce.id = tpas.api_scenario_id
+        <where>
+            <if test="planIds != null and planIds.size() > 0">
+                tpas.test_plan_id in
+                <foreach collection="planIds" item="id" separator="," open="(" close=")">
+                    #{id}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="getScenarioExecuteInfoByIds" resultType="io.metersphere.plan.domain.TestPlanApiScenario">
+        SELECT id, test_plan_id, api_scenario_id, environment_id
+        FROM test_plan_api_scenario
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="getIds"  resultType="java.lang.String">
+        SELECT
+        test_plan_api_scenario.id as id
+        FROM
+        test_plan_api_scenario
+        INNER JOIN api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        WHERE
+        test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+        AND api_scenario.deleted = #{deleted}
+        <include refid="queryWhereConditionByBatchQueryRequest"/>
+    </select>
+    <select id="getSelectIdAndCollectionId" resultType="io.metersphere.plan.domain.TestPlanApiScenario">
+        SELECT
+        test_plan_api_scenario.id as id, test_plan_api_scenario.test_plan_collection_id as testPlanCollectionId
+        FROM
+        test_plan_api_scenario
+        INNER JOIN api_scenario on api_scenario.id = test_plan_api_scenario.api_scenario_id
+        WHERE
+        test_plan_api_scenario.test_plan_id = #{request.testPlanId}
+        AND api_scenario.deleted = false
+        <include refid="queryWhereConditionByBatchQueryRequest"/>
+    </select>
+    <select id="getIdsByReportIdAndCollectionId" resultType="java.lang.String">
+        select id from test_plan_report_api_scenario
+        where test_plan_report_id = #{testPlanReportId} and test_plan_collection_id = #{collectionId}
+        order by pos
+    </select>
+    <sql id="queryWhereConditionByBatchQueryRequest">
+        <if test="request.condition.keyword != null and request.condition.keyword != ''">
+            and (
+            api_scenario.num like concat('%', #{request.condition.keyword},'%')
+            or api_scenario.name like concat('%', #{request.condition.keyword},'%')
+            or api_scenario.tags like concat('%', #{request.condition.keyword},'%')
+            )
+        </if>
+        <if test="request.moduleIds != null and request.moduleIds.size() > 0">
+            and api_scenario.module_id in
+            <foreach collection="request.moduleIds" item="nodeId" separator="," open="(" close=")">
+                #{nodeId}
+            </foreach>
+        </if>
+        <if test="request.collectionId != null and request.collectionId != ''">
+            and t.test_plan_collection_id = #{request.collectionId}
+        </if>
+        <include refid="filters">
+            <property name="filter" value="request.condition.filter"/>
+        </include>
+        <if test="request.condition.combine != null and request.condition.combine != ''">
+            <include refid="combine">
+                <property name="condition" value="request.condition.combine"/>
+                <property name="name" value="request.name"/>
+                <property name="ObjectTags" value="request.condition.combine.tags"/>
+            </include>
+        </if>
+    </sql>
+
+
+    <update id="batchUpdateExecutor">
+        update test_plan_api_scenario
+        set execute_user = #{userId}
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
 </mapper>

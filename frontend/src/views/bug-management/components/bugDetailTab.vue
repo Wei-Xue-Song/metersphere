@@ -17,7 +17,7 @@
             {{ t('bugManagement.edit.content') }}
           </strong>
         </div>
-        <div class="mb-4 mt-[16px]" :class="{ 'max-h-[260px]': contentEditAble }">
+        <div class="mb-4 mt-[16px]">
           <MsRichText
             v-if="contentEditAble"
             v-model:raw="form.description"
@@ -43,12 +43,13 @@
             <h1 class="header-title">
               <strong>{{ item.fieldName }}</strong>
             </h1>
-            <div class="mb-4 mt-[16px]" :class="{ 'max-h-[260px]': contentEditAble }">
+            <div class="mb-4 mt-[16px]">
               <MsRichText
                 v-if="contentEditAble"
                 v-model:raw="item.defaultValue"
                 v-model:filed-ids="descriptionFileIdMap[item.fieldId]"
                 :disabled="!contentEditAble"
+                :auto-height="false"
                 :placeholder="t('editor.placeholder')"
                 :upload-image="handleUploadImage"
                 :preview-url="EditorPreviewFileUrl"
@@ -202,7 +203,6 @@
   import { Message } from '@arco-design/web-vue';
 
   import MsButton from '@/components/pure/ms-button/index.vue';
-  import { FormRuleItem } from '@/components/pure/ms-form-create/types';
   import MsIconfont from '@/components/pure/ms-icon-font/index.vue';
   import MsRichText from '@/components/pure/ms-rich-text/MsRichText.vue';
   import MsFileList from '@/components/pure/ms-upload/fileList.vue';
@@ -232,7 +232,6 @@
   import { useAppStore } from '@/store';
   import { downloadByteFile, sleep } from '@/utils';
   import { hasAnyPermission } from '@/utils/permission';
-  import { findParents, Option } from '@/utils/recursion';
 
   import { BugEditCustomField, BugEditCustomFieldItem, BugEditFormObject } from '@/models/bug-management';
   import { AssociatedList, AttachFileInfo } from '@/models/caseManagement/featureCase';
@@ -248,7 +247,7 @@
 
   const props = defineProps<{
     detailInfo: BugEditFormObject;
-    formItem: FormRuleItem[];
+    // formItem: FormRuleItem[];
     allowEdit?: boolean; // 是否允许编辑
     isPlatformDefaultTemplate: boolean; // 是否是平台默认模板
     platformSystemFields: BugEditCustomField[]; // 平台系统字段
@@ -453,26 +452,22 @@
     return fileIds;
   }
 
+  function getDetailCustomFields() {
+    return props.detailInfo.customFields.map((item: any) => {
+      return {
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        value: item.value,
+      };
+    });
+  }
+
   // 保存操作
   async function handleSave() {
     try {
       confirmLoading.value = true;
-      const { formItem } = props;
-      const customFields: BugEditCustomFieldItem[] = [];
-      if (formItem && formItem.length) {
-        formItem.forEach((item: FormRuleItem) => {
-          let itemVal = item.value;
-          if (item.sourceType === 'CASCADER') {
-            itemVal = findParents(item.options as Option[], item.value as string, []) || '';
-          }
-          customFields.push({
-            id: item.field as string,
-            name: item.title as string,
-            type: item.sourceType as string,
-            value: Array.isArray(itemVal) ? JSON.stringify(itemVal) : (itemVal as string),
-          });
-        });
-      }
+      const customFields: BugEditCustomFieldItem[] = getDetailCustomFields();
       if (props.isPlatformDefaultTemplate) {
         // 平台系统默认字段插入自定义集合
         props.platformSystemFields.forEach((item) => {
@@ -516,14 +511,12 @@
   }
 
   // 关联文件
-  async function saveSelectAssociatedFile(fileData: AssociatedList[]) {
-    const fileResultList = fileData.map(convertToFileByDetail);
-    fileList.value.push(...fileResultList);
+  async function saveSelectAssociatedFile(fileData: AssociatedList[], selectFileIds?: string[]) {
     const params = {
       request: {
         bugId: bugId.value as string,
         projectId: currentProjectId.value,
-        selectIds: fileResultList.map((item: any) => item.uid),
+        selectIds: selectFileIds || [],
       },
     };
     await uploadOrAssociationFile(params);

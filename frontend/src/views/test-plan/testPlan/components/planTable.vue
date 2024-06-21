@@ -22,8 +22,8 @@
             <a-radio :value="testPlanTypeEnum.GROUP" class="show-type-icon p-[2px]">{{
               t('testPlan.testPlanIndex.testPlanGroup')
             }}</a-radio>
-          </a-radio-group></div
-        >
+          </a-radio-group>
+        </div>
         <div class="mr-[24px]">
           <a-switch v-model="isArchived" size="small" type="line" @change="archivedChangeHandler" />
           <span class="ml-1 text-[var(--color-text-3)]">{{ t('testPlan.testPlanGroup.seeArchived') }}</span>
@@ -39,10 +39,15 @@
     :selectable="hasOperationPermission && showType !== testPlanTypeEnum.ALL"
     filter-icon-align-left
     :expanded-keys="expandedKeys"
+    :disabled-config="{
+      disabledChildren: true,
+      parentKey: 'parent',
+    }"
     v-on="propsEvent"
     @batch-action="handleTableBatch"
     @filter-change="filterChange"
     @drag-change="handleDragChange"
+    @sorter-change="saveSort"
   >
     <!-- TODO: 快捷创建暂时不上 -->
     <!-- <template v-if="hasAnyPermission(['PROJECT_TEST_PLAN:READ+ADD'])" #quickCreate>
@@ -104,13 +109,17 @@
           />
           <span :class="getIconClass(record)">{{ record.childrenCount || 0 }}</span>
         </div>
-        <div
-          :class="`${
-            record.type === testPlanTypeEnum.TEST_PLAN ? 'text-[rgb(var(--primary-5))]' : ''
-          } one-line-text ${hasIndent(record)}`"
-          @click="openDetail(record.id)"
-          >{{ record.num }}</div
-        >
+
+        <div v-if="record.type === testPlanTypeEnum.TEST_PLAN" :class="`one-line-text ${hasIndent(record)}`">
+          <MsButton type="text" @click="openDetail(record.id)"
+            ><a-tooltip :content="record.num.toString()"
+              ><span>{{ record.num }}</span></a-tooltip
+            ></MsButton
+          >
+        </div>
+        <a-tooltip v-else :content="record.num.toString()">
+          <div :class="`one-line-text ${hasIndent(record)}`">{{ record.num }}</div>
+        </a-tooltip>
         <a-tooltip position="right" :disabled="!getSchedule(record.id)" :mouse-enter-delay="300">
           <MsTag
             v-if="getSchedule(record.id)"
@@ -119,6 +128,7 @@
             theme="outline"
             class="ml-2"
             :tooltip-disabled="true"
+            @click="handleScheduledTask(record)"
             >{{ t('testPlan.testPlanIndex.timing') }}</MsTag
           >
           <template #content>
@@ -150,19 +160,39 @@
     </template>
     <template #moduleId="{ record }">
       <a-tooltip :content="getModules(record.moduleId, props.moduleTree)" position="top">
-        <span class="one-line-text inline-block">
+        <div class="one-line-text">
           {{ getModules(record.moduleId, props.moduleTree) }}
-        </span>
+        </div>
       </a-tooltip>
+    </template>
+    <template #planStartToEndTime="{ record }">
+      <div>
+        {{ record.plannedStartTime ? dayjs(record.plannedStartTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}
+        {{ t('common.to') }}
+        <a-tooltip
+          class="ms-tooltip-red"
+          :content="t('testPlan.planStartToEndTimeTip')"
+          :disabled="record.execStatus !== LastExecuteResults.ERROR"
+        >
+          <span :class="[`${record.execStatus === LastExecuteResults.ERROR ? 'text-[rgb(var(--danger-6))' : ''}`]">
+            {{ record?.plannedEndTime ? dayjs(record.plannedEndTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}
+          </span>
+        </a-tooltip>
+      </div>
+    </template>
+    <template #actualStartToEndTime="{ record }">
+      {{ record?.actualStartTime ? dayjs(record.actualStartTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}
+      {{ t('common.to') }} {{ record.actualEndTime ? dayjs(record.actualEndTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}
     </template>
 
     <template #passRate="{ record }">
-      <div class="mr-[8px] w-[100px]">
+      <div v-if="record.type === testPlanTypeEnum.TEST_PLAN" class="mr-[8px] w-[100px]">
         <StatusProgress :status-detail="defaultCountDetailMap[record.id]" height="5px" />
       </div>
-      <div class="text-[var(--color-text-1)]">
-        {{ `${defaultCountDetailMap[record.id] ? defaultCountDetailMap[record.id].passRate : '-'}%` }}
+      <div v-if="record.type === testPlanTypeEnum.TEST_PLAN" class="text-[var(--color-text-1)]">
+        {{ `${defaultCountDetailMap[record.id]?.passRate ? defaultCountDetailMap[record.id].passRate : '-'}%` }}
       </div>
+      <span v-else> - </span>
     </template>
     <template #passRateTitleSlot="{ columnConfig }">
       <div class="flex items-center text-[var(--color-text-3)]">
@@ -176,8 +206,13 @@
       </div>
     </template>
     <template #functionalCaseCount="{ record }">
-      <a-popover position="bottom" content-class="p-[16px]" :disabled="getFunctionalCount(record.id) < 1">
-        <div>{{ getFunctionalCount(record.id) }}</div>
+      <a-popover
+        v-if="record.type === testPlanTypeEnum.TEST_PLAN"
+        position="bottom"
+        content-class="p-[16px]"
+        :disabled="getFunctionalCount(record.id) < 1"
+      >
+        <div v-if="record.type === testPlanTypeEnum.TEST_PLAN">{{ getFunctionalCount(record.id) }}</div>
         <template #content>
           <table class="min-w-[140px] max-w-[176px]">
             <tr>
@@ -193,7 +228,7 @@
                 <div class="text-[var(--color-text-1)]">{{ t('testPlan.testPlanIndex.functionalUseCase') }}</div>
               </td>
               <td class="popover-value-td">
-                {{ getFunctionalCount(record.id) }}
+                {{ defaultCountDetailMap[record.id]?.functionalCaseCount ?? '0' }}
               </td>
             </tr>
             <tr>
@@ -215,26 +250,19 @@
           </table>
         </template>
       </a-popover>
+      <span v-else>-</span>
     </template>
 
     <template #operation="{ record }">
       <div class="flex items-center">
         <MsButton
-          v-if="
-            getFunctionalCount(record.id) > 0 &&
-            hasAnyPermission(['PROJECT_TEST_PLAN:READ+EXECUTE']) &&
-            record.status !== 'ARCHIVED'
-          "
+          v-if="isShowExecuteButton(record) && hasAnyPermission(['PROJECT_TEST_PLAN:READ+EXECUTE'])"
           class="!mx-0"
           @click="executePlan(record)"
           >{{ t('testPlan.testPlanIndex.execution') }}</MsButton
         >
         <a-divider
-          v-if="
-            getFunctionalCount(record.id) > 0 &&
-            hasAnyPermission(['PROJECT_TEST_PLAN:READ+EXECUTE']) &&
-            record.status !== 'ARCHIVED'
-          "
+          v-if="isShowExecuteButton(record) && hasAnyPermission(['PROJECT_TEST_PLAN:READ+EXECUTE'])"
           direction="vertical"
           :margin="8"
         ></a-divider>
@@ -253,8 +281,8 @@
 
         <MsButton
           v-if="
+            !isShowExecuteButton(record) &&
             hasAnyPermission(['PROJECT_TEST_PLAN:READ+ADD']) &&
-            getFunctionalCount(record.id) < 1 &&
             record.status !== 'ARCHIVED'
           "
           class="!mx-0"
@@ -263,14 +291,26 @@
         >
         <a-divider
           v-if="
+            !isShowExecuteButton(record) &&
             hasAnyPermission(['PROJECT_TEST_PLAN:READ+ADD']) &&
-            getFunctionalCount(record.id) < 1 &&
             record.status !== 'ARCHIVED'
           "
           direction="vertical"
           :margin="8"
         ></a-divider>
         <MsTableMoreAction :list="getMoreActions(record)" @select="handleMoreActionSelect($event, record)" />
+      </div>
+    </template>
+    <template v-if="(keyword || '').trim() === ''" #empty>
+      <div class="flex w-full items-center justify-center p-[8px] text-[var(--color-text-4)]">
+        {{ t('common.noData') }}
+        <MsButton v-permission="['PROJECT_TEST_PLAN:READ+ADD']" class="ml-[8px]" @click="emit('new', 'testPlan')">
+          {{ t('testPlan.testPlanIndex.createTestPlan') }}
+        </MsButton>
+        {{ t('caseManagement.featureCase.or') }}
+        <MsButton v-permission="['PROJECT_TEST_PLAN:READ+ADD']" class="ml-[8px]" @click="emit('new', 'group')">
+          {{ t('testPlan.testPlanIndex.createTestPlanGroup') }}
+        </MsButton>
       </div>
     </template>
   </MsBaseTable>
@@ -286,7 +326,7 @@
     <template #title>
       {{ t('testPlan.testPlanIndex.batchExecution') }}
     </template>
-    <a-radio-group v-model="executeForm.executeMode">
+    <a-radio-group v-model="executeForm.runMode">
       <a-radio value="SERIAL">{{ t('testPlan.testPlanIndex.serial') }}</a-radio>
       <a-radio value="PARALLEL">{{ t('testPlan.testPlanIndex.parallel') }}</a-radio>
     </a-radio-group>
@@ -311,7 +351,6 @@
     :type="showType"
     @save="handleMoveOrCopy"
   />
-  <!-- TODO 待联调[编辑] 字段加到统计里边 -->
   <ScheduledModal
     v-model:visible="showScheduledTaskModal"
     :type="planType"
@@ -319,7 +358,12 @@
     :task-config="taskForm"
     @handle-success="fetchData()"
   />
-  <ActionModal v-model:visible="showStatusDeleteModal" :record="activeRecord" @success="fetchData()" />
+  <ActionModal
+    v-model:visible="showStatusDeleteModal"
+    :record="activeRecord"
+    :schedule-config="defaultCountDetailMap[activeRecord?.id || 'none']?.scheduleConfig"
+    @success="fetchData()"
+  />
   <BatchEditModal
     v-model:visible="showEditModel"
     :batch-params="batchParams"
@@ -365,11 +409,13 @@
     batchArchivedPlan,
     batchCopyPlan,
     batchDeletePlan,
+    batchEditTestPlan,
     batchMovePlan,
     deletePlan,
     deleteScheduleTask,
     dragPlanOnGroup,
     executePlanOrGroup,
+    executeSinglePlan,
     getPlanPassRate,
     getTestPlanDetail,
     getTestPlanList,
@@ -383,9 +429,10 @@
   import { characterLimit } from '@/utils';
   import { hasAnyPermission } from '@/utils/permission';
 
-  import { DragSortParams, ModuleTreeNode } from '@/models/common';
+  import { DragSortParams, ModuleTreeNode, TableQueryParams } from '@/models/common';
   import type {
     AddTestPlanParams,
+    BatchExecutePlan,
     BatchMoveParams,
     CreateTask,
     ExecutePlan,
@@ -393,6 +440,7 @@
     PassRateCountDetail,
     TestPlanItem,
   } from '@/models/testPlan/testPlan';
+  import { LastExecuteResults } from '@/enums/caseEnum';
   import { TestPlanRouteEnum } from '@/enums/routeEnum';
   import { ColumnEditTypeEnum, TableKeyEnum } from '@/enums/tableEnum';
   import { FilterSlotNameEnum } from '@/enums/tableFilterEnum';
@@ -420,6 +468,7 @@
   const emit = defineEmits<{
     (e: 'init', params: any): void;
     (e: 'edit', record: TestPlanItem): void;
+    (e: 'new', type: string): void;
   }>();
 
   const isArchived = ref<boolean>(false);
@@ -428,16 +477,16 @@
   const hasOperationPermission = computed(() =>
     hasAnyPermission(['PROJECT_TEST_PLAN:READ+UPDATE', 'PROJECT_TEST_PLAN:READ+EXECUTE', 'PROJECT_TEST_PLAN:READ+ADD'])
   );
+  const showType = ref<keyof typeof testPlanTypeEnum>(testPlanTypeEnum.ALL);
 
   const columns: MsTableColumn = [
     {
       title: 'testPlan.testPlanIndex.ID',
       slotName: 'num',
       dataIndex: 'num',
-      width: 150,
+      width: 180,
       showInTable: true,
       showDrag: false,
-      showTooltip: true,
       columnSelectorDisabled: true,
     },
     {
@@ -520,29 +569,30 @@
       },
       width: 200,
       showDrag: true,
+      showTooltip: true,
     },
     {
       title: 'testPlan.testPlanIndex.planStartToEndTime',
       slotName: 'planStartToEndTime',
-      dataIndex: 'planStartToEndTime',
       showInTable: false,
       sortable: {
         sortDirections: ['ascend', 'descend'],
         sorter: true,
       },
-      width: 200,
+      width: 370,
+      showTooltip: true,
       showDrag: true,
     },
     {
       title: 'testPlan.testPlanIndex.actualStartToEndTime',
       slotName: 'actualStartToEndTime',
-      dataIndex: 'actualStartToEndTime',
       showInTable: false,
       sortable: {
         sortDirections: ['ascend', 'descend'],
         sorter: true,
       },
-      width: 200,
+      showTooltip: true,
+      width: 370,
       showDrag: true,
     },
     {
@@ -577,8 +627,6 @@
       return Promise.resolve(false);
     }
   }
-
-  const showType = ref<keyof typeof testPlanTypeEnum>(testPlanTypeEnum.ALL);
 
   // 设置对齐缩进
   function hasIndent(record: TestPlanItem) {
@@ -678,25 +726,25 @@
     {
       label: 'testPlan.testPlanIndex.createScheduledTask',
       eventTag: 'createScheduledTask',
-      permission: ['PROJECT_TEST_PLAN:READ+UPDATE'],
+      permission: ['PROJECT_TEST_PLAN:READ+EXECUTE'],
     },
   ];
   const updateAndDeleteScheduledActions: ActionsItem[] = [
     {
       label: 'testPlan.testPlanIndex.updateScheduledTask',
       eventTag: 'updateScheduledTask',
-      permission: ['PROJECT_TEST_PLAN:READ+UPDATE'],
+      permission: ['PROJECT_TEST_PLAN:READ+EXECUTE'],
     },
     {
       label: 'testPlan.testPlanIndex.deleteScheduledTask',
       eventTag: 'deleteScheduledTask',
-      permission: ['PROJECT_TEST_PLAN:READ+UPDATE'],
+      permission: ['PROJECT_TEST_PLAN:READ+EXECUTE'],
     },
   ];
 
   const defaultCountDetailMap = ref<Record<string, PassRateCountDetail>>({});
   function getFunctionalCount(id: string) {
-    return defaultCountDetailMap.value[id]?.functionalCaseCount ?? 0;
+    return defaultCountDetailMap.value[id]?.caseTotal ?? 0;
   }
   function getSchedule(id: string) {
     return !!defaultCountDetailMap.value[id]?.scheduleConfig;
@@ -705,13 +753,20 @@
     return defaultCountDetailMap.value[id].scheduleConfig.enable;
   }
 
+  function isShowExecuteButton(record: TestPlanItem) {
+    return (
+      ((record.type === testPlanTypeEnum.TEST_PLAN && getFunctionalCount(record.id) > 0) ||
+        (record.type === testPlanTypeEnum.GROUP && record.childrenCount)) &&
+      record.status !== 'ARCHIVED'
+    );
+  }
+
   function getMoreActions(record: TestPlanItem) {
     const { status: planStatus } = record;
-    const useCount = defaultCountDetailMap.value[record.id]?.functionalCaseCount ?? 0;
 
     // 有用例数量才可以执行 否则不展示执行
     const copyAction =
-      useCount > 0 && hasAnyPermission(['PROJECT_TEST_PLAN:READ+ADD']) && planStatus !== 'ARCHIVED' ? copyActions : [];
+      isShowExecuteButton(record) && hasAnyPermission(['PROJECT_TEST_PLAN:READ+ADD']) ? copyActions : [];
 
     let scheduledTaskAction: ActionsItem[] = [];
     if (planStatus !== 'ARCHIVED' && record.groupId && record.groupId === 'NONE') {
@@ -759,23 +814,43 @@
     showSetting: true,
     heightUsed: 236,
     paginationSize: 'mini',
-    showSelectorAll: true,
+    showSelectorAll: false,
     draggable: { type: 'handle' },
     draggableCondition: true,
   });
 
-  const { propsRes, propsEvent, loadList, setLoadListParams, resetSelector, resetFilterParams, setPagination } =
-    useTable(
-      getTestPlanList,
-      tableProps.value,
-      (item) => {
+  function getTags(record: TestPlanItem) {
+    if (record.children && record.children.length) {
+      record.children = record.children.map((child: TestPlanItem) => getTags(child));
+    }
+    return {
+      ...record,
+      tags: (record.tags || []).map((item: any, i: number) => {
         return {
-          ...item,
-          tags: (item.tags || []).map((e: string) => ({ id: e, name: e })),
+          id: `${record.id}-${i}`,
+          name: item,
         };
-      },
-      updatePlanName
-    );
+      }),
+    };
+  }
+
+  const {
+    propsRes,
+    propsEvent,
+    loadList,
+    setLoadListParams,
+    resetSelector,
+    resetFilterParams,
+    setPagination,
+    setLoading,
+  } = useTable(
+    getTestPlanList,
+    tableProps.value,
+    (item: any) => {
+      return getTags(item);
+    },
+    updatePlanName
+  );
 
   const batchParams = ref<BatchActionQueryParams>({
     selectedIds: [],
@@ -828,6 +903,11 @@
     setLoadListParams(await initTableParams());
     loadList();
   }
+  // 排序
+  const sort = ref<{ [key: string]: string }>({});
+  function saveSort(sortObj: { [key: string]: string }) {
+    sort.value = sortObj;
+  }
 
   // 获取父组件模块数量
   async function emitTableParams(isInit = false) {
@@ -870,19 +950,18 @@
   /**
    * 批量执行
    */
-  const initExecuteForm: ExecutePlan = {
+  const initExecuteForm: BatchExecutePlan = {
     projectId: appStore.currentProjectId,
     executeIds: [],
-    executeMode: 'SERIAL',
+    runMode: 'SERIAL',
+    executionSource: 'MANUAL',
   };
 
-  const executeForm = ref<ExecutePlan>(cloneDeep(initExecuteForm));
+  const executeForm = ref<BatchExecutePlan>(cloneDeep(initExecuteForm));
   const executeVisible = ref<boolean>(false);
 
-  function handleExecute(isBatch: boolean) {
-    if (isBatch) {
-      executeForm.value.executeIds = batchParams.value.selectedIds || [];
-    }
+  function handleExecute() {
+    executeForm.value.executeIds = batchParams.value.selectedIds || [];
     executeVisible.value = true;
   }
 
@@ -897,7 +976,7 @@
 
   const confirmLoading = ref<boolean>(false);
 
-  async function executeHandler() {
+  async function batchHandleExecute() {
     confirmLoading.value = true;
     try {
       await executePlanOrGroup(executeForm.value);
@@ -912,13 +991,43 @@
     }
   }
 
+  const executeId = ref<string>('');
+  async function singleExecute(id: string) {
+    confirmLoading.value = true;
+    executeId.value = id;
+    try {
+      const params: ExecutePlan = {
+        executeId: id,
+        runMode: executeForm.value.runMode,
+        executionSource: 'MANUAL',
+      };
+      await executeSinglePlan(params);
+      Message.success(t('case.detail.execute.success'));
+      fetchData();
+      cancelHandler();
+    } catch (error) {
+      console.log(error);
+    } finally {
+      executeId.value = '';
+      confirmLoading.value = false;
+      setLoading(false);
+    }
+  }
+
+  async function executeHandler() {
+    if (executeId.value) {
+      singleExecute(executeId.value);
+    } else {
+      batchHandleExecute();
+    }
+  }
+
   // 测试计划详情
   function executePlan(record: TestPlanItem) {
     const { type, id } = record;
-
+    executeId.value = id;
     if (type === testPlanTypeEnum.GROUP) {
-      handleExecute(false);
-      executeForm.value.executeIds = [id];
+      executeVisible.value = true;
       return;
     }
     if (type === testPlanTypeEnum.TEST_PLAN) {
@@ -930,11 +1039,12 @@
             name: TestPlanRouteEnum.TEST_PLAN_INDEX_DETAIL,
             query: {
               id,
+              type: 'featureCase',
             },
           });
         } else {
-          executeForm.value.executeIds = [id];
-          executeHandler();
+          setLoading(true);
+          singleExecute(record.id);
         }
       }
     }
@@ -993,9 +1103,42 @@
   }
 
   /**
-   * 打开关闭定时任务 TODO 待联调
+   * 打开关闭定时任务
    */
-  function handleStatusTimingTask(enable: boolean) {}
+  async function handleStatusTimingTask(enable: boolean) {
+    const filterParams = {
+      ...propsRes.value.filter,
+    };
+    if (isArchived.value) {
+      filterParams.status = ['ARCHIVED'];
+    }
+    try {
+      const { selectedIds, selectAll, excludeIds } = batchParams.value;
+      const params: TableQueryParams = {
+        selectIds: selectedIds || [],
+        selectAll: !!selectAll,
+        excludeIds: excludeIds || [],
+        projectId: appStore.currentProjectId,
+        moduleIds: props.activeFolder === 'all' ? [] : [props.activeFolder, ...props.offspringIds],
+        condition: {
+          filter: filterParams,
+          keyword: keyword.value,
+        },
+        type: showType.value,
+        scheduleOpen: enable,
+        editColumn: 'SCHEDULE',
+      };
+      await batchEditTestPlan(params);
+      Message.success(
+        enable
+          ? t('testPlan.testPlanGroup.enableScheduleTaskSuccess')
+          : t('testPlan.testPlanGroup.closeScheduleTaskSuccess')
+      );
+      fetchData();
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
   /**
    * 归档测试计划以及计划组
@@ -1108,7 +1251,7 @@
     batchParams.value = params;
     switch (event.eventTag) {
       case 'execute':
-        handleExecute(true);
+        handleExecute();
         break;
       case 'copy':
         handleCopyOrMove('copy');
@@ -1144,6 +1287,9 @@
   const planSourceId = ref<string>();
   const planType = ref<keyof typeof testPlanTypeEnum>(testPlanTypeEnum.TEST_PLAN);
   function handleScheduledTask(record: TestPlanItem) {
+    if (!hasAnyPermission(['PROJECT_TEST_PLAN:READ+EXECUTE'])) {
+      return;
+    }
     planType.value = record.type;
     planSourceId.value = record.id;
     taskForm.value = defaultCountDetailMap.value[record.id]?.scheduleConfig;
@@ -1172,7 +1318,7 @@
     showStatusDeleteModal.value = true;
   }
 
-  // 拖拽排序 TODO 待联调
+  // 拖拽排序
   async function handleDragChange(params: DragSortParams) {
     try {
       await dragPlanOnGroup(params);
@@ -1289,7 +1435,8 @@
     () => showType.value,
     (val) => {
       if (val) {
-        tableProps.value.draggableCondition = hasAnyPermission(['PROJECT_TEST_PLAN:READ+UPDATE']) && val === 'ALL';
+        tableProps.value.draggableCondition =
+          hasAnyPermission(['PROJECT_TEST_PLAN:READ+UPDATE']) && val !== 'TEST_PLAN' && !Object.keys(sort.value).length;
         setPagination({
           current: 1,
         });
@@ -1297,6 +1444,21 @@
         resetFilterParams();
         fetchData();
       }
+    }
+  );
+
+  watch(
+    () => sort.value,
+    (val) => {
+      if (val) {
+        tableProps.value.draggableCondition =
+          hasAnyPermission(['PROJECT_TEST_PLAN:READ+UPDATE']) &&
+          showType.value !== 'GROUP' &&
+          !Object.keys(sort.value).length;
+      }
+    },
+    {
+      deep: true,
     }
   );
 
@@ -1435,9 +1597,19 @@
     color: var(--color-text-4);
   }
   .popover-value-td {
-    @apply font-medium;
+    @apply text-right font-medium;
 
     padding-top: 8px;
     color: var(--color-text-1);
+  }
+  :deep(.parent-tr) {
+    .arco-table-drag-handle {
+      pointer-events: none;
+      .arco-table-cell {
+        svg {
+          color: transparent;
+        }
+      }
+    }
   }
 </style>

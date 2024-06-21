@@ -2,8 +2,15 @@ import MSR from '@/api/http';
 import * as reportUrl from '@/api/requrls/test-plan/report';
 
 import type { GetShareId } from '@/models/apiTest/report';
+import { ReportDetail, ReportStepDetail } from "@/models/apiTest/report";
 import { CommonList, TableQueryParams } from '@/models/common';
-import { FeatureCaseItem, ReportBugItem, UpdateReportDetailParams } from '@/models/testPlan/report';
+import {
+  ApiOrScenarioCaseItem,
+  FeatureCaseItem,
+  ReportBugItem,
+  UpdateReportDetailParams,
+} from '@/models/testPlan/report';
+import { PlanReportDetail } from '@/models/testPlan/testPlanReport';
 
 // 报告列表
 export function reportList(data: TableQueryParams) {
@@ -78,6 +85,69 @@ export function planGetShareHref(id: string) {
 // 测试计划-报告-获取分享链接时效
 export function getShareValidity(id: string) {
   return MSR.get({ url: `${reportUrl.GetShareValidityUrl}/${id}` });
+}
+// 测试计划-独立报告-接口用例
+export function getApiPage(data: TableQueryParams) {
+  if (data.shareId) {
+    return MSR.post<CommonList<ApiOrScenarioCaseItem>>({ url: reportUrl.ReportShareApiUrl, data });
+  }
+  return MSR.post<CommonList<ApiOrScenarioCaseItem>>({ url: reportUrl.ReportIndependentApiUrl, data });
+}
+// 测试计划-报告-获取分享链接时效
+export function getScenarioPage(data: TableQueryParams) {
+  if (data.shareId) {
+    return MSR.post<CommonList<ApiOrScenarioCaseItem>>({ url: reportUrl.ReportShareScenarioUrl, data });
+  }
+  return MSR.post<CommonList<ApiOrScenarioCaseItem>>({ url: reportUrl.ReportIndependentScenarioUrl, data });
+}
+// 测试计划-独立报告-接口用例
+export function getShareApiPage(data: TableQueryParams) {
+  return MSR.post<CommonList<ApiOrScenarioCaseItem>>({ url: reportUrl.ReportShareApiUrl, data });
+}
+// 测试计划-报告-场景用例
+export function getShareScenarioPage(data: TableQueryParams) {
+  return MSR.post<CommonList<ApiOrScenarioCaseItem>>({ url: reportUrl.ReportShareScenarioUrl, data });
+}
+// 测试计划-聚合报告-报告明细
+export function getReportDetailPage(data: TableQueryParams) {
+  return MSR.post<CommonList<PlanReportDetail>>({ url: reportUrl.ReportDetailPageUrl, data });
+}
+// 测试计划-聚合报告-报告明细-分享
+export function getReportDetailSharePage(data: TableQueryParams) {
+  return MSR.post<CommonList<PlanReportDetail>>({ url: reportUrl.ReportDetailSharePageUrl, data });
+}
+
+export function reportScenarioDetail(reportId: string, shareId?: string | undefined) {
+  if (shareId) {
+    return MSR.get<ReportDetail>({ url: `${reportUrl.ReportShareScenarioUrlGet}/${shareId}/${reportId}` });
+  }
+  return MSR.get<ReportDetail>({ url: `${reportUrl.ReportScenarioUrl}/${reportId}` });
+}
+// 报告步骤详情
+export function reportStepDetail(reportId?: string, stepId?: string, shareId?: string | undefined) {
+  if (shareId) {
+    return MSR.get<ReportStepDetail>({
+      url: `${reportUrl.ReportShareScenarioUrlGetDetail}/${shareId}/${reportId}/${stepId}`,
+    });
+  }
+  return MSR.get<ReportStepDetail>({ url: `${reportUrl.ReportDetailScenarioUrl}/${reportId}/${stepId}` });
+}
+// 用例报告详情
+export function reportCaseDetail(reportId: string, shareId?: string | undefined) {
+  if (shareId) {
+    return MSR.get<ReportDetail>({ url: `${reportUrl.ReportShareApiUrlGet}/${shareId}/${reportId}` });
+  }
+  return MSR.get<ReportDetail>({ url: `${reportUrl.ReportApiUrl}/${reportId}` });
+}
+
+// 报告步骤详情
+export function reportCaseStepDetail(reportId: string, stepId: string, shareId?: string | undefined) {
+  if (shareId) {
+    return MSR.get<ReportStepDetail[]>({
+      url: `${reportUrl.ReportShareApiUrlGetDetail}/${shareId}/${reportId}/${stepId}`,
+    });
+  }
+  return MSR.get<ReportStepDetail[]>({ url: `${reportUrl.ReportDetailApiUrl}/${reportId}/${stepId}` });
 }
 
 export default {};

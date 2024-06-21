@@ -163,6 +163,7 @@
         show-type="CASE"
         :active-type="activeTab"
         :report-detail="detail || []"
+        :get-report-step-detail="props.getReportStepDetail"
       />
     </div>
     <!-- 报告明细结束 -->
@@ -171,7 +172,6 @@
 
 <script setup lang="ts">
   import { ref } from 'vue';
-  import { useRoute } from 'vue-router';
   import { cloneDeep } from 'lodash-es';
 
   import SetReportChart from './case/setReportChart.vue';
@@ -179,6 +179,7 @@
   import reportInfoHeader from './step/reportInfoHeaders.vue';
   import TiledList from './tiledList.vue';
 
+  import { toolTipConfig } from '@/config/testPlan';
   import { useI18n } from '@/hooks/useI18n';
   import { addCommasToNumber, formatDuration } from '@/utils';
 
@@ -186,11 +187,10 @@
 
   import { getIndicators } from '../utils';
 
-  const route = useRoute();
-
   const { t } = useI18n();
   const props = defineProps<{
     detailInfo?: ReportDetail;
+    getReportStepDetail?: (...args: any) => Promise<any>; // 获取步骤的详情内容接口
   }>();
 
   const detail = ref<ReportDetail>({
@@ -249,8 +249,7 @@
   const legendData = ref<LegendData[]>([]);
   const charOptions = ref({
     tooltip: {
-      trigger: 'item',
-      show: false,
+      ...toolTipConfig,
     },
     legend: {
       show: false,

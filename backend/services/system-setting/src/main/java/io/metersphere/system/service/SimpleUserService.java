@@ -43,7 +43,6 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
-import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.ibatis.session.ExecutorType;
 import org.apache.ibatis.session.SqlSession;
@@ -130,7 +129,7 @@ public class SimpleUserService {
     }
 
     private List<UserCreateInfo> saveUserAndRole(UserBatchCreateRequest userCreateDTO, String source, String operator, String requestPath) {
-        int responseCode = Objects.requireNonNull(CommonBeanFactory.getBean(UserXpackService.class)).guessWhatHowToAddUser(userCreateDTO, source, operator);
+        int responseCode = Objects.requireNonNull(CommonBeanFactory.getBean(UserXpackService.class)).GWHowToAddUser(userCreateDTO, source, operator);
         if (responseCode == 0) {
             operationLogService.batchAdd(userLogService.getBatchAddLogs(userCreateDTO.getUserInfoList(), operator, requestPath));
         } else {
@@ -226,25 +225,20 @@ public class SimpleUserService {
             this.checkProcessUserAndThrowException(request.getSelectIds(), operatorId, operatorName, Translator.get("user.not.disable"));
         }
 
-        TableBatchProcessResponse response = new TableBatchProcessResponse();
-        response.setTotalCount(request.getSelectIds().size());
-        UserExample userExample = new UserExample();
-        userExample.createCriteria().andIdIn(
-                request.getSelectIds()
-        );
+        int responseCode = Objects.requireNonNull(CommonBeanFactory.getBean(UserXpackService.class)).GWHowToChangeUser(request.getSelectIds(), request.isEnable(), operatorName);
 
-        User updateUser = new User();
-        updateUser.setEnable(request.isEnable());
-        updateUser.setUpdateUser(operatorId);
-        updateUser.setUpdateTime(System.currentTimeMillis());
-        response.setSuccessCount(userMapper.updateByExampleSelective(updateUser, userExample));
-
-        if (BooleanUtils.isFalse(request.isEnable())) {
-            //如果是禁用，批量踢出用户
-            request.getSelectIds().forEach(SessionUtils::kickOutUser);
+        if (responseCode == 0) {
+            TableBatchProcessResponse response = new TableBatchProcessResponse();
+            response.setTotalCount(request.getSelectIds().size());
+            response.setSuccessCount(request.getSelectIds().size());
+            return response;
+        } else {
+            if (responseCode == -1) {
+                throw new MSException(SystemResultCode.USER_TOO_MANY, Translator.getWithArgs("user_open_source_max", 30));
+            } else {
+                throw new MSException(SystemResultCode.DEPT_USER_TOO_MANY, Translator.getWithArgs("user_dept_max", responseCode));
+            }
         }
-
-        return response;
     }
 
     private void checkUserInDb(List<String> userIdList) {
@@ -325,12 +319,13 @@ public class SimpleUserService {
         this.checkUserInDb(userIdList);
         //检查是否含有Admin
         this.checkProcessUserAndThrowException(userIdList, operatorId, operatorName, Translator.get("user.not.delete"));
+        //开始删除
         UserExample userExample = new UserExample();
         userExample.createCriteria().andIdIn(userIdList);
-        //更新删除标志位
         TableBatchProcessResponse response = new TableBatchProcessResponse();
         response.setTotalCount(userIdList.size());
-        response.setSuccessCount(this.deleteUserByList(userIdList, operatorId));
+        response.setSuccessCount(
+                Objects.requireNonNull(CommonBeanFactory.getBean(UserXpackService.class)).GWHowToDeleteUser(userIdList, operatorId));
         //删除用户角色关系
         userRoleRelationService.deleteByUserIdList(userIdList);
         //批量踢出用户
@@ -354,23 +349,6 @@ public class SimpleUserService {
                 throw new MSException(exceptionMessage + ": admin");
             }
         }
-    }
-
-    private int deleteUserByList(List<String> updateUserList, String operator) {
-        SqlSession sqlSession = sqlSessionFactory.openSession(ExecutorType.BATCH);
-        BaseUserMapper batchDeleteMapper = sqlSession.getMapper(BaseUserMapper.class);
-        int insertIndex = 0;
-        long deleteTime = System.currentTimeMillis();
-        for (String userId : updateUserList) {
-            batchDeleteMapper.deleteUser(userId, operator, deleteTime);
-            insertIndex++;
-            if (insertIndex % 50 == 0) {
-                sqlSession.flushStatements();
-            }
-        }
-        sqlSession.flushStatements();
-        SqlSessionUtils.closeSqlSession(sqlSession, sqlSessionFactory);
-        return insertIndex;
     }
 
     public List<User> getUserList(String keyword) {
@@ -452,7 +430,7 @@ public class SimpleUserService {
         //校验邮箱和角色的合法性
         Map<String, String> errorMap = this.validateUserInfo(request.getInviteEmails());
         if (MapUtils.isNotEmpty(errorMap)) {
-            throw new MSException(Translator.get("user.email.repeat"));
+            throw new MSException(Translator.get("user.email.repeat") + " : " + StringUtils.join(errorMap.keySet(), ", "));
         }
         List<UserInvite> inviteList = userInviteService.batchInsert(request.getInviteEmails(), inviteUser.getId(), request.getUserRoleIds());
         //记录日志
@@ -527,7 +505,7 @@ public class SimpleUserService {
             this.add(userInvite.getEmail());
         }});
 
-        int responseCode = Objects.requireNonNull(CommonBeanFactory.getBean(UserXpackService.class)).guessWhatHowToAddUser(request, userInvite);
+        int responseCode = Objects.requireNonNull(CommonBeanFactory.getBean(UserXpackService.class)).GWHowToAddUser(request, userInvite);
         if (responseCode == 0) {
             //删除本次邀请记录
             userInviteService.deleteInviteById(userInvite.getId());

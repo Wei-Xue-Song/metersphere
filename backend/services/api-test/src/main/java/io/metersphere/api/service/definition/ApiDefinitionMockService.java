@@ -101,6 +101,9 @@ public class ApiDefinitionMockService {
     private static final String MOCK_TABLE = "api_definition_mock";
 
     public List<ApiDefinitionMockDTO> getPage(ApiDefinitionMockPageRequest request) {
+        if (CollectionUtils.isEmpty(request.getProtocols())) {
+            return new ArrayList<>();
+        }
         return extApiDefinitionMockMapper.list(request);
     }
 
@@ -394,6 +397,7 @@ public class ApiDefinitionMockService {
     }
 
     public void batchEdit(ApiMockBatchEditRequest request, String userId) {
+
         List<String> ids = doSelectIds(request);
         if (CollectionUtils.isNotEmpty(ids)) {
             SubListUtils.dealForSubList(ids, 500, subList -> batchEditByType(request, subList, userId, request.getProjectId()));
@@ -459,7 +463,7 @@ public class ApiDefinitionMockService {
     }
 
     public List<String> doSelectIds(ApiTestCaseBatchRequest request) {
-        if (request.isSelectAll()) {
+        if (request.isSelectAll() && CollectionUtils.isNotEmpty(request.getProtocols())) {
             List<String> ids = extApiDefinitionMockMapper.getIds(request);
             if (CollectionUtils.isNotEmpty(request.getExcludeIds())) {
                 ids.removeAll(request.getExcludeIds());

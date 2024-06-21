@@ -19,15 +19,16 @@
       </a-tooltip>
     </template>
     <template #headerRight>
-      <MsButton
-        v-if="hasAnyPermission(['PROJECT_TEST_PLAN:READ+ASSOCIATION']) && detail.status !== 'ARCHIVED'"
-        type="button"
-        status="default"
-        @click="linkCase"
-      >
-        <MsIcon type="icon-icon_link-record_outlined1" class="mr-[8px]" />
-        {{ t('ms.case.associate.title') }}
-      </MsButton>
+      <a-switch
+        v-model="treeType"
+        size="small"
+        type="line"
+        checked-value="MODULE"
+        unchecked-value="COLLECTION"
+        class="mr-[4px]"
+        @change="loadActiveTabList"
+      />
+      <span class="mr-[14px]">{{ t('testPlan.testPlanDetail.moduleView') }}</span>
       <MsButton v-if="isEnableEdit" type="button" status="default" @click="editorCopyHandler(false)">
         <MsIcon type="icon-icon_edit_outlined" class="mr-[8px]" />
         {{ t('common.edit') }}
@@ -94,16 +95,18 @@
       v-model:active-key="activeTab"
       :get-text-func="getTabBadge"
       :content-tab-list="tabList"
+      :change-interceptor="changeTabInterceptor"
       no-content
       class="relative mx-[16px] border-b"
     />
   </MsCard>
   <!-- special-height的174: 上面卡片高度158 + mt的16 -->
   <MsCard class="mt-[16px]" :special-height="174" simple has-breadcrumb no-content-padding>
+    <Plan v-if="activeTab === 'plan'" :plan-id="planId" :status="detail.status || 'PREPARED'" @refresh="initDetail" />
     <FeatureCase
       v-if="activeTab === 'featureCase'"
       ref="featureCaseRef"
-      :repeat-case="detail.repeatCase"
+      :tree-type="treeType"
       :can-edit="detail.status !== 'ARCHIVED'"
       @refresh="initDetail"
     />
@@ -111,28 +114,19 @@
     <ApiCase
       v-if="activeTab === 'apiCase'"
       ref="apiCaseRef"
-      :repeat-case="detail.repeatCase"
+      :tree-type="treeType"
       :can-edit="detail.status !== 'ARCHIVED'"
       @refresh="initDetail"
     />
     <ApiScenario
       v-if="activeTab === 'apiScenario'"
       ref="apiScenarioRef"
-      :repeat-case="detail.repeatCase"
+      :tree-type="treeType"
       :can-edit="detail.status !== 'ARCHIVED'"
       @refresh="initDetail"
     />
     <ExecuteHistory v-if="activeTab === 'executeHistory'" />
   </MsCard>
-  <!-- TODO  待联调关联用例 目前可以暂时关联功能用例 -->
-  <AssociateDrawer
-    v-model:visible="caseAssociateVisible"
-    :associated-ids="detail.repeatCase ? hasSelectedIds : []"
-    :save-api="associationCaseToPlan"
-    :test-plan-id="planId"
-    @success="handleSuccess"
-  />
-
   <CreateAndEditPlanDrawer
     v-model:visible="showPlanDrawer"
     :plan-id="planId"
@@ -156,18 +150,17 @@
   import { ActionsItem } from '@/components/pure/ms-table-more-action/types';
   import MsStatusTag from '@/components/business/ms-status-tag/index.vue';
   import ActionModal from '../components/actionModal.vue';
-  import AssociateDrawer from '../components/associateDrawer.vue';
   import StatusProgress from '../components/statusProgress.vue';
   import ApiCase from './apiCase/index.vue';
   import ApiScenario from './apiScenario/index.vue';
   import BugManagement from './bugManagement/index.vue';
   import ExecuteHistory from './executeHistory/index.vue';
   import FeatureCase from './featureCase/index.vue';
+  import Plan from './plan/index.vue';
   import CreateAndEditPlanDrawer from '@/views/test-plan/testPlan/createAndEditPlanDrawer.vue';
 
   import {
     archivedPlan,
-    associationCaseToPlan,
     followPlanRequest,
     generateReport,
     getPlanPassRate,
@@ -178,6 +171,7 @@
   import { useI18n } from '@/hooks/useI18n';
   import useModal from '@/hooks/useModal';
   import useAppStore from '@/store/modules/app';
+  import useMinderStore from '@/store/modules/components/minder-editor';
   import useUserStore from '@/store/modules/user';
   import { characterLimit } from '@/utils';
   import { hasAnyPermission } from '@/utils/permission';
@@ -191,11 +185,14 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const minderStore = useMinderStore();
+
   const loading = ref(false);
   const planId = ref(route.query.id as string);
   const detail = ref<TestPlanDetail>({
     ...testPlanDefaultDetail,
   });
+  const treeType = ref<'MODULE' | 'COLLECTION'>('COLLECTION');
 
   const countDetail = ref<PassRateCountDetail>({ ...defaultDetailCount });
 
@@ -210,6 +207,7 @@
       // eslint-disable-next-line prefer-destructuring
       countDetail.value = result[0];
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.log(error);
     }
   }
@@ -269,6 +267,7 @@
           Message.success(t('common.batchArchiveSuccess'));
           initDetail();
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.log(error);
         }
       },
@@ -305,29 +304,54 @@
     }
   }
 
-  const activeTab = ref('featureCase');
-  const tabList = ref([
-    {
-      value: 'featureCase',
-      label: t('menu.caseManagement.featureCase'),
-    },
-    {
-      value: 'defectList',
-      label: t('caseManagement.featureCase.defectList'),
-    },
-    {
-      value: 'apiCase',
-      label: t('testPlan.testPlanIndex.apiCase'),
-    },
-    {
-      value: 'apiScenario',
-      label: t('testPlan.testPlanIndex.apiScenarioCase'),
-    },
-    {
-      value: 'executeHistory',
-      label: t('testPlan.featureCase.executionHistory'),
-    },
-  ]);
+  const activeTab = ref('plan');
+  watch(
+    () => detail.value,
+    () => {
+      const { functionalCaseCount, apiCaseCount, apiScenarioCount } = detail.value || {};
+      if (
+        (!functionalCaseCount && activeTab.value === 'featureCase') ||
+        (!apiCaseCount && activeTab.value === 'apiCase') ||
+        (!apiScenarioCount && activeTab.value === 'apiScenario')
+      ) {
+        activeTab.value = 'plan';
+      }
+    }
+  );
+  const tabList = computed(() => {
+    return [
+      {
+        value: 'plan',
+        label: t('testPlan.plan'), // 测试规划
+        show: true,
+      },
+      {
+        value: 'featureCase',
+        label: t('menu.caseManagement.featureCase'), // 功能用例
+        show: detail.value.functionalCaseCount,
+      },
+      {
+        value: 'apiCase',
+        label: t('testPlan.testPlanIndex.apiCase'),
+        show: detail.value?.apiCaseCount,
+      },
+      {
+        value: 'apiScenario',
+        label: t('caseManagement.featureCase.sceneCase'),
+        show: detail.value?.apiScenarioCount,
+      },
+      {
+        value: 'defectList',
+        label: t('caseManagement.featureCase.defectList'), // 缺陷列表
+        show: true,
+      },
+      {
+        value: 'executeHistory',
+        label: t('testPlan.featureCase.executionHistory'), // 执行历史
+        show: true,
+      },
+    ].filter((tab) => tab.show); // 过滤掉不显示的 tab
+  });
   function getTabBadge(tabKey: string) {
     switch (tabKey) {
       case 'featureCase':
@@ -346,12 +370,7 @@
         return '';
     }
   }
-  const hasSelectedIds = ref<string[]>([]);
-  const caseAssociateVisible = ref(false);
-  // 关联用例
-  function linkCase() {
-    caseAssociateVisible.value = true;
-  }
+
   const showPlanDrawer = ref(false);
 
   // 生成报告
@@ -361,6 +380,7 @@
       await generateReport({
         projectId: appStore.currentProjectId,
         testPlanId: detail.value.id as string,
+        triggerMode: 'MANUAL',
       });
       Message.success(t('testPlan.testPlanDetail.successfullyGenerated'));
     } catch (error) {
@@ -410,6 +430,7 @@
     try {
       testPlanTree.value = await getTestPlanModule({ projectId: appStore.currentProjectId });
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.log(error);
     }
   }
@@ -417,8 +438,7 @@
   const featureCaseRef = ref<InstanceType<typeof FeatureCase>>();
   const apiCaseRef = ref<InstanceType<typeof ApiCase>>();
   const apiScenarioRef = ref<InstanceType<typeof ApiScenario>>();
-  function handleSuccess() {
-    initDetail();
+  function loadActiveTabList() {
     switch (activeTab.value) {
       case 'featureCase':
         featureCaseRef.value?.getCaseTableList();
@@ -434,7 +454,31 @@
     }
   }
 
+  function changeTabInterceptor(newVal: string, oldVal: string, done: () => void) {
+    if (oldVal === 'plan' && minderStore.minderUnsaved) {
+      openModal({
+        type: 'warning',
+        title: t('common.tip'),
+        content: t('ms.minders.leaveUnsavedTip'),
+        okText: t('common.confirm'),
+        cancelText: t('common.cancel'),
+        okButtonProps: {
+          status: 'normal',
+        },
+        onBeforeOk: async () => {
+          done();
+        },
+        hideCancel: false,
+      });
+      return;
+    }
+    done();
+  }
+
   onBeforeMount(() => {
+    if (route.query.type === 'featureCase') {
+      activeTab.value = 'featureCase';
+    }
     initDetail();
     initPlanTree();
   });

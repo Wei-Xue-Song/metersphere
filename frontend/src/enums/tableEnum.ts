@@ -72,8 +72,6 @@ export enum TableKeyEnum {
   TEST_PLAN_DETAIL_API_CASE = 'testPlanDetailApiCase',
   TEST_PLAN_DETAIL_API_SCENARIO = 'testPlanDetailApiScenario',
   TEST_PLAN_REPORT_TABLE = 'testPlanReportTable',
-  TEST_PLAN_REPORT_DETAIL_BUG = 'testPlanReportDetailBug',
-  TEST_PLAN_REPORT_DETAIL_FEATURE_CASE = 'testPlanReportDetailFeatureCase',
   TASK_API_CASE_SYSTEM = 'taskCenterApiCaseSystem',
   TASK_API_CASE_ORGANIZATION = 'taskCenterApiCaseOrganization',
   TASK_API_CASE_PROJECT = 'taskCenterApiCaseProject',
@@ -89,6 +87,10 @@ export enum TableKeyEnum {
   TASK_PLAN_SYSTEM = 'taskCenterPlanSystem',
   TASK_PLAN_ORGANIZATION = 'taskCenterPlanOrganization',
   TASK_PLAN_PROJECT = 'taskCenterPlanProject',
+  ASSOCIATE_CASE_API = 'associateCaseApi',
+  ASSOCIATE_CASE_API_CASE = 'associateCaseApiCase',
+  ASSOCIATE_CASE_API_SCENARIO = 'associateCaseApiScenario',
+  ASSOCIATE_CASE = 'associateCase',
 }
 
 // 具有特殊功能的列

@@ -174,10 +174,10 @@ public class ApiScenarioService extends MoveNodeService {
     private static final String SCENARIO = "SCENARIO";
 
 
-    public List<ApiScenarioDTO> getScenarioPage(ApiScenarioPageRequest request) {
+    public List<ApiScenarioDTO> getScenarioPage(ApiScenarioPageRequest request, boolean isRepeat, String testPlanId) {
         //CustomFieldUtils.setBaseQueryRequestCustomMultipleFields(request, userId);
         //TODO  场景的自定义字段 等设计 不一定会有
-        List<ApiScenarioDTO> list = extApiScenarioMapper.list(request);
+        List<ApiScenarioDTO> list = extApiScenarioMapper.list(request, isRepeat, testPlanId);
         if (CollectionUtils.isNotEmpty(list)) {
             processApiScenario(list);
         }
@@ -1289,7 +1289,7 @@ public class ApiScenarioService extends MoveNodeService {
         }
     }
 
-    private ApiScenario checkResourceExist(String id) {
+    public ApiScenario checkResourceExist(String id) {
         return ServiceUtils.checkResourceExist(apiScenarioMapper.selectByPrimaryKey(id), "permission.system_api_scenario.name");
     }
 
@@ -2154,7 +2154,7 @@ public class ApiScenarioService extends MoveNodeService {
     }
 
     private void getCaseStep(ApiScenarioSystemRequest request, ScenarioSystemRequest caseRequest, List<ApiScenarioStepDTO> steps) {
-        if (CollectionUtils.isNotEmpty(caseRequest.getModuleIds())) {
+        if (CollectionUtils.isNotEmpty(caseRequest.getModuleIds()) && CollectionUtils.isNotEmpty(caseRequest.getProtocols())) {
             caseRequest.getSelectedIds().addAll(extApiTestCaseMapper.getIdsByModules(caseRequest));
         }
         caseRequest.getSelectedIds().removeAll(caseRequest.getUnselectedIds());
@@ -2178,7 +2178,7 @@ public class ApiScenarioService extends MoveNodeService {
     }
 
     private void getApiStep(ApiScenarioSystemRequest request, ScenarioSystemRequest apiRequest, List<ApiScenarioStepDTO> steps) {
-        if (CollectionUtils.isNotEmpty(apiRequest.getModuleIds())) {
+        if (CollectionUtils.isNotEmpty(apiRequest.getModuleIds()) && CollectionUtils.isNotEmpty(apiRequest.getProtocols())) {
             apiRequest.getSelectedIds().addAll(extApiDefinitionMapper.getIdsByModules(apiRequest));
         }
         apiRequest.getSelectedIds().removeAll(apiRequest.getUnselectedIds());
@@ -2243,16 +2243,29 @@ public class ApiScenarioService extends MoveNodeService {
         if (CollectionUtils.isNotEmpty(reportIds)) {
             List<ExecuteReportDTO> historyDeletedList = extApiScenarioReportMapper.getHistoryDeleted(reportIds);
             historyDeletedMap = historyDeletedList.stream().collect(Collectors.toMap(ExecuteReportDTO::getId, Function.identity()));
-
         }
+        Map<String, String> testPlanIdMap = executeList.stream()
+                .filter(apiReport -> !StringUtils.equals(apiReport.getTestPlanId(), "NONE"))
+                .collect(Collectors.toMap(ExecuteReportDTO::getId, ExecuteReportDTO::getTestPlanId));
+        List<String> testPlanIds = new ArrayList<>(testPlanIdMap.keySet());
+        Map<String, String> testPlanNumMap = new HashMap<>();
+        if (org.apache.commons.collections.CollectionUtils.isNotEmpty(testPlanIds)) {
+            List<ExecuteReportDTO> testPlanNameLists = extApiScenarioReportMapper.getTestPlanNum(testPlanIds);
+            testPlanNumMap = testPlanNameLists.stream().collect(Collectors.toMap(ExecuteReportDTO::getId, ExecuteReportDTO::getTestPlanNum));
+        }
+
         Map<String, String> userMap = userLoginService.getUserNameMap(new ArrayList<>(userSet));
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
         Map<String, ExecuteReportDTO> finalHistoryDeletedMap = historyDeletedMap;
+        Map<String, String> finalTestPlanNumMap = testPlanNumMap;
         executeList.forEach(apiReport -> {
             apiReport.setOperationUser(userMap.get(apiReport.getCreateUser()));
             Date date = new Date(apiReport.getStartTime());
             apiReport.setNum(sdf.format(date));
             apiReport.setHistoryDeleted(MapUtils.isNotEmpty(finalHistoryDeletedMap) && !finalHistoryDeletedMap.containsKey(apiReport.getId()));
+            if (MapUtils.isNotEmpty(testPlanIdMap) && testPlanIdMap.containsKey(apiReport.getId())) {
+                apiReport.setTestPlanNum(StringUtils.join(Translator.get("test_plan"), ": ", finalTestPlanNumMap.get(apiReport.getId())));
+            }
         });
         return executeList;
     }
@@ -2332,7 +2345,8 @@ public class ApiScenarioService extends MoveNodeService {
                         resourceInfo.setDelete(apiTestCase.getDeleted());
                         resourceInfo.setProjectId(apiTestCase.getProjectId());
                     });
-            default -> {}
+            default -> {
+            }
         }
         Optional.ofNullable(apiStepResourceInfo).ifPresent(resourceInfo -> {
             Project project = projectMapper.selectByPrimaryKey(resourceInfo.getProjectId());

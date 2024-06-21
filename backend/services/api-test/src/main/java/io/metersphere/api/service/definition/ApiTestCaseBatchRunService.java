@@ -88,7 +88,7 @@ public class ApiTestCaseBatchRunService {
      *
      * @param request
      */
-    public void serialExecute(ApiTestCaseBatchRunRequest request, String userId) throws Exception {
+    public void serialExecute(ApiTestCaseBatchRunRequest request, String userId) {
         List<String> ids = apiTestCaseService.doSelectIds(request, false);
         ApiRunModeConfigDTO runModeConfig = getRunModeConfig(request);
 
@@ -304,22 +304,17 @@ public class ApiTestCaseBatchRunService {
         return taskRequest;
     }
 
-    private TaskBatchRequestDTO getTaskBatchRequestDTO(String projectId, ApiRunModeConfigDTO runModeConfig) {
+    public TaskBatchRequestDTO getTaskBatchRequestDTO(String projectId, ApiRunModeConfigDTO runModeConfig) {
         TaskBatchRequestDTO taskRequest = new TaskBatchRequestDTO();
         TaskInfo taskInfo = getTaskInfo(projectId, runModeConfig);
         taskRequest.setTaskInfo(taskInfo);
         return taskRequest;
     }
 
-    private TaskInfo getTaskInfo(String projectId, ApiRunModeConfigDTO runModeConfig) {
+    public TaskInfo getTaskInfo(String projectId, ApiRunModeConfigDTO runModeConfig) {
         TaskInfo taskInfo = apiTestCaseService.getTaskInfo(projectId, ApiExecuteRunMode.RUN.name());
-        taskInfo.setSaveResult(true);
-        taskInfo.setRealTime(false);
-        taskInfo.setNeedParseScript(true);
-        taskInfo.setRunModeConfig(runModeConfig);
-        return taskInfo;
+        return apiBatchRunBaseService.setBatchRunTaskInfoParam(runModeConfig, taskInfo);
     }
-
 
     /**
      * 预生成用例的执行报告
@@ -346,10 +341,9 @@ public class ApiTestCaseBatchRunService {
         return apiTestCaseRecords;
     }
 
-
-    private ApiReport getApiReport(ApiRunModeConfigDTO runModeConfig, ApiTestCase apiTestCase, String userId) {
+    public ApiReport getApiReport(ApiRunModeConfigDTO runModeConfig, ApiTestCase apiTestCase, String userId) {
         ApiReport apiReport = getApiReport(runModeConfig, userId);
-        apiReport.setEnvironmentId(apiTestCaseService.getEnvId(runModeConfig, apiTestCase));
+        apiReport.setEnvironmentId(apiTestCaseService.getEnvId(runModeConfig, apiTestCase.getEnvironmentId()));
         apiReport.setName(apiTestCase.getName() + "_" + DateUtils.getTimeString(System.currentTimeMillis()));
         apiReport.setProjectId(apiTestCase.getProjectId());
         apiReport.setTriggerMode(TaskTriggerMode.BATCH.name());

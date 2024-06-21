@@ -46,6 +46,7 @@
               v-if="attrs.selectorType === 'checkbox'"
               :value="getChecked(record)"
               :indeterminate="getIndeterminate(record)"
+              :disabled="isDisabledChildren(record)"
               @click.stop
               @change="rowSelectChange(record)"
             />
@@ -87,7 +88,7 @@
               }"
             >
               <slot :name="item.titleSlotName" :column-config="item">
-                <div v-if="item.title" class="title-name text-[var(--color-text-3)]">
+                <div v-if="item.title" class="title-name">
                   {{ t(item.title as string) }}
                 </div>
               </slot>
@@ -98,8 +99,11 @@
                 "
                 :table-key="(attrs.tableKey as TableKeyEnum)"
                 :is-simple="(attrs.isSimpleSetting as boolean)"
+                :only-page-size="!!attrs.onlyPageSize"
+                :show-pagination="!!attrs.showPagination"
                 @show-setting="handleShowSetting"
                 @init-data="handleInitColumn"
+                @page-size-change="pageSizeChange"
               />
               <DefaultFilter
                 v-else-if="(item.filterConfig && item.filterConfig.options?.length) || item?.filterConfig?.remoteMethod"
@@ -234,6 +238,11 @@
           </div>
         </slot>
       </template>
+
+      <!-- 控制拖拽类 -->
+      <template #tr="{ record }">
+        <tr :class="!record.parent ? 'parent-tr' : 'children-tr'" />
+      </template>
     </a-table>
     <div
       v-if="showBatchAction || !!attrs.showPagination"
@@ -329,6 +338,10 @@
     excludeKeys: Set<string>;
     selectorStatus: SelectAllEnum;
     actionConfig?: BatchActionConfig;
+    disabledConfig?: {
+      disabledChildren?: boolean;
+      parentKey?: string;
+    };
     noDisable?: boolean;
     showSetting?: boolean;
     columns: MsTableColumn;
@@ -737,6 +750,14 @@
     return false;
   }
 
+  function isDisabledChildren(record: TableData) {
+    if (!props.disabledConfig?.disabledChildren) {
+      return false;
+    }
+    // 子级禁用
+    return !!record[props.disabledConfig.parentKey || 'parent'];
+  }
+
   onMounted(async () => {
     await initColumn();
     batchLeft.value = getBatchLeft();
@@ -995,6 +1016,13 @@
           color: rgb(var(--primary-5));
         }
       }
+    }
+  }
+  :deep(.arco-table-th-title) {
+    .title-name {
+      @apply break-keep;
+
+      color: var(--color-text-3);
     }
   }
 </style>

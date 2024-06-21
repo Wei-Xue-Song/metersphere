@@ -4,12 +4,14 @@ import io.metersphere.bug.domain.BugRelationCaseExample;
 import io.metersphere.bug.mapper.BugRelationCaseMapper;
 import io.metersphere.bug.service.BugCommonService;
 import io.metersphere.plan.dto.TestPlanBugCaseDTO;
+import io.metersphere.plan.dto.TestPlanCollectionDTO;
 import io.metersphere.plan.dto.request.BaseCollectionAssociateRequest;
 import io.metersphere.plan.dto.request.TestPlanBugPageRequest;
 import io.metersphere.plan.dto.response.TestPlanBugPageResponse;
 import io.metersphere.plan.mapper.ExtTestPlanBugMapper;
 import io.metersphere.plugin.platform.dto.SelectOption;
 import io.metersphere.system.dto.sdk.OptionDTO;
+import io.metersphere.system.dto.sdk.SessionUser;
 import io.metersphere.system.mapper.BaseUserMapper;
 import jakarta.annotation.Resource;
 import org.apache.commons.collections4.CollectionUtils;
@@ -56,7 +58,7 @@ public class TestPlanBugService extends TestPlanResourceService {
     }
 
     @Override
-    public long copyResource(String originalTestPlanId, String newTestPlanId, String operator, long operatorTime) {
+    public long copyResource(String originalTestPlanId, String newTestPlanId, Map<String, String> oldCollectionIdToNewCollectionId, String operator, long operatorTime) {
         return 0;
     }
 
@@ -118,7 +120,12 @@ public class TestPlanBugService extends TestPlanResourceService {
     }
 
     @Override
-    public void associateCollection(String planId, List<BaseCollectionAssociateRequest> collectionAssociates) {
+    public void associateCollection(String planId, Map<String, List<BaseCollectionAssociateRequest>> collectionAssociates, SessionUser user) {
         // TODO: 暂不支持缺陷关联测试集
     }
+
+	@Override
+	public void initResourceDefaultCollection(String planId, List<TestPlanCollectionDTO> defaultCollections) {
+		// 暂不支持缺陷关联测试集
+	}
 }

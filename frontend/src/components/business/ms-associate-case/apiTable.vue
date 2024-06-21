@@ -12,7 +12,7 @@
     @filter-change="getModuleCount"
   >
     <template #num="{ record }">
-      <MsButton type="text">{{ record.num }}</MsButton>
+      <MsButton type="text" @click="toDetail(record)">{{ record.num }}</MsButton>
     </template>
     <template #[FilterSlotNameEnum.API_TEST_API_REQUEST_METHODS]="{ filterContent }">
       <apiMethodName :method="filterContent.value" />
@@ -32,8 +32,6 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
-
   import MsButton from '@/components/pure/ms-button/index.vue';
   import MsBaseTable from '@/components/pure/ms-table/base-table.vue';
   import { MsTableColumn } from '@/components/pure/ms-table/type';
@@ -41,18 +39,25 @@
   import apiMethodName from '@/views/api-test/components/apiMethodName.vue';
 
   import { useI18n } from '@/hooks/useI18n';
+  import useOpenNewPage from '@/hooks/useOpenNewPage';
+  import useTableStore from '@/hooks/useTableStore';
   import useAppStore from '@/store/modules/app';
 
+  import { ApiDefinitionDetail } from '@/models/apiTest/management';
   import type { TableQueryParams } from '@/models/common';
   import { RequestMethods } from '@/enums/apiEnum';
   import { CasePageApiTypeEnum } from '@/enums/associateCaseEnum';
   import { CaseLinkEnum } from '@/enums/caseEnum';
+  import { ApiTestRouteEnum } from '@/enums/routeEnum';
+  import { SpecialColumnEnum, TableKeyEnum } from '@/enums/tableEnum';
   import { FilterRemoteMethodsEnum, FilterSlotNameEnum } from '@/enums/tableFilterEnum';
 
   import { getPublicLinkCaseListMap } from './utils/page';
 
   const { t } = useI18n();
+  const { openNewPage } = useOpenNewPage();
   const appStore = useAppStore();
+
   const props = defineProps<{
     associationType: string; // 关联类型 项目 | 测试计划 | 用例评审
     activeModule: string;
@@ -65,13 +70,17 @@
     showType: string;
     getPageApiType: keyof typeof CasePageApiTypeEnum; // 获取未关联分页Api
     extraTableParams?: TableQueryParams; // 查询表格的额外参数
+    protocols: string[];
   }>();
 
   const emit = defineEmits<{
     (e: 'getModuleCount', params: TableQueryParams): void;
     (e: 'refresh'): void;
     (e: 'initModules'): void;
+    (e: 'update:selectedIds'): void;
   }>();
+
+  const tableStore = useTableStore();
 
   const requestMethodsOptions = computed(() => {
     return Object.values(RequestMethods).map((e) => {
@@ -158,27 +167,46 @@
       width: 200,
       showDrag: true,
     },
+    {
+      title: '',
+      dataIndex: 'action',
+      width: 24,
+      slotName: SpecialColumnEnum.ACTION,
+      fixed: 'right',
+    },
   ];
 
-  const { propsRes, propsEvent, loadList, setLoadListParams, resetSelector, setPagination, resetFilterParams } =
-    useTable(getPublicLinkCaseListMap[props.getPageApiType][props.activeSourceType].API, {
-      columns,
-      showSetting: false,
-      selectable: true,
-      showSelectAll: true,
-      heightUsed: 310,
-      showSelectorAll: true,
-    });
+  const {
+    propsRes,
+    propsEvent,
+    loadList,
+    setLoadListParams,
+    resetSelector,
+    setPagination,
+    resetFilterParams,
+    setTableSelected,
+  } = useTable(getPublicLinkCaseListMap[props.getPageApiType][props.activeSourceType].API, {
+    tableKey: TableKeyEnum.ASSOCIATE_CASE_API,
+    showSetting: true,
+    isSimpleSetting: true,
+    onlyPageSize: true,
+    selectable: true,
+    showSelectAll: true,
+    heightUsed: 310,
+    showSelectorAll: false,
+  });
 
   async function getTableParams() {
+    const { excludeKeys } = propsRes.value;
     return {
       keyword: props.keyword,
       projectId: props.currentProject,
-      protocol: 'HTTP',
+      protocols: props.protocols,
       moduleIds: props.activeModule === 'all' || !props.activeModule ? [] : [props.activeModule, ...props.offspringIds],
-      excludeIds: [...(props.associatedIds || [])], // 已经存在的关联的id列表
+      excludeIds: [...excludeKeys],
       condition: {
         keyword: props.keyword,
+        filter: propsRes.value.filter,
       },
       ...props.extraTableParams,
     };
@@ -194,6 +222,11 @@
   }
 
   async function loadApiList() {
+    if (props.associatedIds && props.associatedIds.length) {
+      props.associatedIds.forEach((hasNotAssociatedId) => {
+        setTableSelected(hasNotAssociatedId);
+      });
+    }
     const tableParams = await getTableParams();
     setLoadListParams(tableParams);
     loadList();
@@ -205,33 +238,44 @@
   }
 
   watch(
-    () => props.activeSourceType,
+    () => [() => props.currentProject, () => props.protocols],
+    () => {
+      setPagination({
+        current: 1,
+      });
+      resetSelector();
+      resetFilterParams();
+      loadApiList();
+    }
+  );
+
+  const innerSelectedIds = defineModel<string[]>('selectedIds', { required: true });
+  const selectIds = computed(() => {
+    return [...propsRes.value.selectedKeys];
+  });
+
+  watch(
+    () => selectIds.value,
     (val) => {
-      if (val) {
+      innerSelectedIds.value = val;
+    }
+  );
+
+  watch(
+    () => props.showType,
+    (val) => {
+      if (val === 'API') {
         resetSelector();
         resetFilterParams();
-        setPagination({
-          current: 1,
-        });
+        loadApiList();
       }
     }
   );
 
   watch(
-    () => props.currentProject,
+    () => props.activeModule,
     (val) => {
       if (val) {
-        loadApiList();
-      }
-    },
-    {
-      immediate: true,
-    }
-  );
-  watch(
-    () => props.showType,
-    (val) => {
-      if (val === 'API') {
         resetSelector();
         resetFilterParams();
         loadApiList();
@@ -244,16 +288,31 @@
     const tableParams = getTableParams();
     return {
       ...tableParams,
-      excludeIds: [...excludeKeys].concat(...(props.associatedIds || [])),
+      excludeIds: [...excludeKeys],
       selectIds: selectorStatus === 'all' ? [] : [...selectedKeys],
       selectAll: selectorStatus === 'all',
+      associateApiType: 'API',
     };
+  }
+
+  // 去接口详情页面
+  function toDetail(record: ApiDefinitionDetail) {
+    openNewPage(ApiTestRouteEnum.API_TEST_MANAGEMENT, {
+      dId: record.id,
+      pId: record.projectId,
+    });
   }
 
   defineExpose({
     getApiSaveParams,
     loadApiList,
   });
+
+  await tableStore.initColumn(TableKeyEnum.ASSOCIATE_CASE_API, columns, 'drawer');
 </script>
 
-<style scoped></style>
+<style lang="less" scoped>
+  :deep(.arco-table-cell-align-left) {
+    padding: 0 8px !important;
+  }
+</style>

@@ -65,6 +65,7 @@
     PluginKey,
     RichTextEditor,
   } from '@halo-dev/richtext-editor';
+  import CharacterCount from '@tiptap/extension-character-count';
   import Mention from '@tiptap/extension-mention';
   import type { queueAsPromised } from 'fastq';
   import * as fastq from 'fastq';
@@ -83,6 +84,7 @@
       raw?: string;
       uploadImage?: (file: File) => Promise<any>;
       maxHeight?: string;
+      autoHeight?: boolean;
       filedIds?: string[];
       commentIds?: string[];
       wrapperClass?: string;
@@ -90,12 +92,14 @@
       draggable?: boolean;
       previewUrl?: string;
       editable?: boolean;
+      limitLength?: number;
     }>(),
     {
       raw: '',
       uploadImage: undefined,
       placeholder: 'editor.placeholder',
       draggable: false,
+      autoHeight: true,
     }
   );
 
@@ -327,7 +331,6 @@
           HTMLAttributes: {
             class: 'mention',
           },
-          // TODO第一版本先按照初始化评论的人 不加userMap
           // @ts-ignore
           renderHTML({ options, node }) {
             return [
@@ -339,6 +342,9 @@
           },
           suggestion,
         }) as Extension<any, any>,
+        CharacterCount.configure({
+          limit: props.limitLength || null,
+        }),
       ],
       autofocus: false,
       editable: !props.editable,
@@ -438,7 +444,7 @@
 
   const contentStyles = computed(() => {
     return {
-      maxHeight: props.maxHeight || '200px',
+      maxHeight: props.autoHeight ? '800px' : props.maxHeight || '260px',
       overflow: 'auto',
     };
   });
@@ -520,7 +526,7 @@
     @apply relative overflow-hidden;
     :deep(.halo-rich-text-editor .ProseMirror) {
       padding: 16px !important;
-      height: 130px;
+      min-height: 130px;
       p:first-child {
         margin-top: 0;
       }

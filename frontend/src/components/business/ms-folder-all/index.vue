@@ -11,7 +11,13 @@
         v-if="typeof isExpandAll === 'boolean'"
         :content="isExpandAll ? t('common.collapseAll') : t('common.expandAll')"
       >
-        <MsButton type="icon" status="secondary" class="!mr-0 p-[4px]" @click="changeExpand">
+        <MsButton
+          v-if="typeof isExpandAll === 'boolean'"
+          type="icon"
+          status="secondary"
+          class="!mr-0 p-[4px]"
+          @click="changeExpand"
+        >
           <MsIcon :type="isExpandAll ? 'icon-icon_folder_collapse1' : 'icon-icon_folder_expansion1'" />
         </MsButton>
       </a-tooltip>
@@ -27,7 +33,7 @@
   import { addCommasToNumber } from '@/utils';
 
   const props = defineProps<{
-    activeFolder: string; // 选中的节点
+    activeFolder?: string; // 选中的节点
     folderName: string; // 名称
     allCount: number; // 总数
   }>();

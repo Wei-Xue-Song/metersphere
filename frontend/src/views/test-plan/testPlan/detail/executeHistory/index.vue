@@ -1,23 +1,30 @@
 <template>
   <div class="p-[16px]">
     <ms-base-table v-bind="propsRes" no-disable v-on="propsEvent">
-      <template #[FilterSlotNameEnum.API_TEST_CASE_API_REPORT_EXECUTE_RESULT]="{ filterContent }">
+      <template #[FilterSlotNameEnum.TEST_PLAN_STATUS_FILTER]="{ filterContent }">
         <ExecutionStatus :module-type="ReportEnum.API_REPORT" :status="filterContent.value" />
       </template>
       <template #triggerMode="{ record }">
         <span>{{ t(TriggerModeLabel[record.triggerMode as keyof typeof TriggerModeLabel]) }}</span>
       </template>
       <template #lastExecResult="{ record }">
-        <ExecutionStatus :status="record.status" :module-type="ReportEnum.API_REPORT" />
+        <ExecutionStatus v-if="record.execResult" :status="record.execResult" :module-type="ReportEnum.API_REPORT" />
       </template>
       <template #executionStartAndEndTime="{ record }">
-        <!-- TODO 样式 -->
-        <div>{{ record.startTime }} 至 {{ record.endTime ?? '-' }}</div>
+        <div>
+          {{ dayjs(record.startTime).format('YYYY-MM-DD HH:mm:ss') }} 至
+          {{ record.endTime ? dayjs(record.endTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}
+        </div>
       </template>
       <template #operation="{ record }">
-        <MsButton class="!mr-0" @click="toReport(record)">
-          {{ t('apiScenario.executeHistory.execution.operation') }}
-        </MsButton>
+        <a-tooltip :content="t('project.executionHistory.cleared')" :disabled="!record.deleted">
+          <MsButton
+            :disabled="record.deleted || !hasAnyPermission(['PROJECT_TEST_PLAN_REPORT:READ'])"
+            class="!mr-0"
+            @click="toReport(record)"
+            >{{ t('apiScenario.executeHistory.execution.operation') }}
+          </MsButton>
+        </a-tooltip>
       </template>
     </ms-base-table>
   </div>
@@ -37,22 +44,29 @@
   import { getPlanDetailExecuteHistory } from '@/api/modules/test-plan/testPlan';
   import { useI18n } from '@/hooks/useI18n';
   import useOpenNewPage from '@/hooks/useOpenNewPage';
-  import useAppStore from '@/store/modules/app';
+  import { hasAnyPermission } from '@/utils/permission';
 
   import type { PlanDetailExecuteHistoryItem } from '@/models/testPlan/testPlan';
-  import { ReportEnum, TriggerModeLabel } from '@/enums/reportEnum';
+  import { PlanReportStatus, ReportEnum, TriggerModeLabel } from '@/enums/reportEnum';
   import { TestPlanRouteEnum } from '@/enums/routeEnum';
   import { FilterSlotNameEnum } from '@/enums/tableFilterEnum';
 
   import { triggerModeOptions } from '@/views/api-test/report/utils';
-  import { executionResultMap } from '@/views/case-management/caseManagementFeature/components/utils';
 
   const { t } = useI18n();
   const route = useRoute();
-  const appStore = useAppStore();
   const { openNewPage } = useOpenNewPage();
 
   const planId = ref(route.query.id as string);
+
+  const statusResultOptions = computed(() => {
+    return Object.keys(PlanReportStatus).map((key) => {
+      return {
+        value: key,
+        label: PlanReportStatus[key].statusText,
+      };
+    });
+  });
 
   const columns: MsTableColumn = [
     {
@@ -73,13 +87,11 @@
     },
     {
       title: 'common.executionResult',
-      dataIndex: 'lastExecResult',
+      dataIndex: 'execResult',
       slotName: 'lastExecResult',
       filterConfig: {
-        valueKey: 'key',
-        labelKey: 'statusText',
-        options: Object.values(executionResultMap),
-        filterSlotName: FilterSlotNameEnum.CASE_MANAGEMENT_EXECUTE_RESULT,
+        options: statusResultOptions.value,
+        filterSlotName: FilterSlotNameEnum.TEST_PLAN_STATUS_FILTER,
       },
       width: 150,
     },
@@ -93,7 +105,7 @@
       title: 'testPlan.executeHistory.executionStartAndEndTime',
       dataIndex: 'startTime',
       slotName: 'executionStartAndEndTime',
-      width: 200,
+      width: 300,
     },
     {
       title: 'common.operation',
@@ -121,8 +133,7 @@
 
   function loadExecuteList() {
     setLoadListParams({
-      projectId: appStore.currentProjectId,
-      id: planId.value,
+      testPlanId: planId.value,
     });
     loadList();
   }

@@ -8,17 +8,18 @@
       moreAction: [],
     }"
     v-on="propsEvent"
-    @filter-change="getModuleCount"
   >
     <template #num="{ record }">
-      <MsButton type="text">{{ record.num }}</MsButton>
+      <MsButton type="text" @click="toDetail(record)">{{ record.num }}</MsButton>
     </template>
     <template #lastReportStatus="{ record }">
       <ExecutionStatus
+        v-if="record.lastReportStatus !== 'PENDING'"
         :module-type="ReportEnum.API_REPORT"
         :status="record.lastReportStatus"
         :class="[!record.lastReportId ? '' : 'cursor-pointer']"
       />
+      <span v-else>-</span>
     </template>
     <template #[FilterSlotNameEnum.CASE_MANAGEMENT_CASE_LEVEL]="{ filterContent }">
       <CaseLevel :case-level="filterContent.value" />
@@ -55,19 +56,23 @@
   import ExecuteResult from '@/components/business/ms-case-associate/executeResult.vue';
   import ExecutionStatus from '@/views/api-test/report/component/reportStatus.vue';
 
-  import { useI18n } from '@/hooks/useI18n';
+  import useOpenNewPage from '@/hooks/useOpenNewPage';
+  import useTableStore from '@/hooks/useTableStore';
   import { characterLimit } from '@/utils';
 
+  import { ApiCaseDetail } from '@/models/apiTest/management';
   import type { TableQueryParams } from '@/models/common';
   import { CasePageApiTypeEnum } from '@/enums/associateCaseEnum';
   import { CaseLinkEnum } from '@/enums/caseEnum';
   import { ReportEnum, ReportStatus } from '@/enums/reportEnum';
+  import { ApiTestRouteEnum } from '@/enums/routeEnum';
+  import { SpecialColumnEnum, TableKeyEnum } from '@/enums/tableEnum';
   import { FilterSlotNameEnum } from '@/enums/tableFilterEnum';
 
   import { getPublicLinkCaseListMap } from './utils/page';
   import { casePriorityOptions } from '@/views/api-test/components/config';
 
-  const { t } = useI18n();
+  const { openNewPage } = useOpenNewPage();
 
   const props = defineProps<{
     associationType: string; // 关联类型 项目 | 测试计划 | 用例评审
@@ -78,15 +83,20 @@
     activeSourceType: keyof typeof CaseLinkEnum;
     selectorAll?: boolean;
     keyword: string;
+    showType: string;
     getPageApiType: keyof typeof CasePageApiTypeEnum; // 获取未关联分页Api
     extraTableParams?: TableQueryParams; // 查询表格的额外参数
+    protocols: string[];
   }>();
 
   const emit = defineEmits<{
     (e: 'getModuleCount', params: TableQueryParams): void;
     (e: 'refresh'): void;
     (e: 'initModules'): void;
+    (e: 'update:selectedIds'): void;
   }>();
+
+  const tableStore = useTableStore();
 
   const lastReportStatusListOptions = computed(() => {
     return Object.keys(ReportStatus).map((key) => {
@@ -147,6 +157,13 @@
       showDrag: true,
     },
     {
+      title: 'common.tag',
+      slotName: 'tags',
+      dataIndex: 'tags',
+      isTag: true,
+      width: 300,
+    },
+    {
       title: 'caseManagement.featureCase.tableColumnCreateUser',
       slotName: 'createName',
       dataIndex: 'createName',
@@ -165,6 +182,13 @@
       width: 200,
       showDrag: true,
     },
+    {
+      title: '',
+      dataIndex: 'action',
+      width: 24,
+      slotName: SpecialColumnEnum.ACTION,
+      fixed: 'right',
+    },
   ];
 
   const getPageList = computed(() => {
@@ -181,90 +205,112 @@
     return undefined;
   }
 
-  const { propsRes, propsEvent, loadList, setLoadListParams, resetSelector, setPagination, resetFilterParams } =
-    useTable(
-      getPageList.value,
-      {
-        columns,
-        showSetting: false,
-        selectable: true,
-        showSelectAll: true,
-        heightUsed: 310,
-        showSelectorAll: true,
-      },
-      (record) => {
-        return {
-          ...record,
-          caseLevel: getCaseLevel(record),
-          tags: (record.tags || []).map((item: string, i: number) => {
-            return {
-              id: `${record.id}-${i}`,
-              name: item,
-            };
-          }),
-        };
-      }
-    );
+  const {
+    propsRes,
+    propsEvent,
+    loadList,
+    setLoadListParams,
+    resetSelector,
+    setPagination,
+    resetFilterParams,
+    setTableSelected,
+  } = useTable(
+    getPageList.value,
+    {
+      tableKey: TableKeyEnum.ASSOCIATE_CASE_API_CASE,
+      showSetting: true,
+      isSimpleSetting: true,
+      onlyPageSize: true,
+      selectable: true,
+      showSelectAll: true,
+      heightUsed: 310,
+      showSelectorAll: false,
+    },
+    (record) => {
+      return {
+        ...record,
+        caseLevel: getCaseLevel(record),
+        tags: (record.tags || []).map((item: string, i: number) => {
+          return {
+            id: `${record.id}-${i}`,
+            name: item,
+          };
+        }),
+      };
+    }
+  );
 
   async function getTableParams() {
+    const { excludeKeys } = propsRes.value;
+
     return {
       keyword: props.keyword,
       projectId: props.currentProject,
-      protocol: 'HTTP',
       moduleIds: props.activeModule === 'all' || !props.activeModule ? [] : [props.activeModule, ...props.offspringIds],
-      excludeIds: [...(props.associatedIds || [])], // 已经存在的关联的id列表
+      excludeIds: [...excludeKeys],
       condition: {
         keyword: props.keyword,
+        filter: propsRes.value.filter,
       },
+      protocols: props.protocols,
       ...props.extraTableParams,
     };
   }
 
-  async function getModuleCount() {
-    const tableParams = await getTableParams();
-    emit('getModuleCount', {
-      ...tableParams,
-      current: propsRes.value.msPagination?.current,
-      pageSize: propsRes.value.msPagination?.pageSize,
-    });
-  }
-
   async function loadCaseList() {
+    if (props.associatedIds && props.associatedIds.length) {
+      props.associatedIds.forEach((hasNotAssociatedId) => {
+        setTableSelected(hasNotAssociatedId);
+      });
+    }
     const tableParams = await getTableParams();
     setLoadListParams(tableParams);
     loadList();
-    emit('getModuleCount', {
-      ...tableParams,
-      current: propsRes.value.msPagination?.current,
-      pageSize: propsRes.value.msPagination?.pageSize,
-    });
   }
 
   const tableRef = ref<InstanceType<typeof MsBaseTable>>();
 
   watch(
-    () => props.activeSourceType,
+    () => props.showType,
     (val) => {
-      if (val) {
-        tableRef.value?.initColumn(columns);
+      if (val === 'API_CASE') {
         resetSelector();
         resetFilterParams();
-        setPagination({
-          current: 1,
-        });
+        loadCaseList();
       }
     }
   );
 
   watch(
-    () => props.currentProject,
+    () => () => props.currentProject,
+    () => {
+      setPagination({
+        current: 1,
+      });
+      resetSelector();
+      resetFilterParams();
+      loadCaseList();
+    }
+  );
+  const innerSelectedIds = defineModel<string[]>('selectedIds', { required: true });
+  const selectIds = computed(() => {
+    return [...propsRes.value.selectedKeys];
+  });
+
+  watch(
+    () => selectIds.value,
+    (val) => {
+      innerSelectedIds.value = val;
+    }
+  );
+  watch(
+    () => props.activeModule,
     (val) => {
       if (val) {
+        resetSelector();
+        resetFilterParams();
         loadCaseList();
       }
-    },
-    {
-      immediate: true,
     }
   );
 
@@ -273,16 +319,31 @@
     const tableParams = getTableParams();
     return {
       ...tableParams,
-      excludeIds: [...excludeKeys].concat(...(props.associatedIds || [])),
+      excludeIds: [...excludeKeys],
       selectIds: selectorStatus === 'all' ? [] : [...selectedKeys],
       selectAll: selectorStatus === 'all',
+      associateApiType: 'API_CASE',
     };
+  }
+
+  // 去接口用例详情页面
+  function toDetail(record: ApiCaseDetail) {
+    openNewPage(ApiTestRouteEnum.API_TEST_MANAGEMENT, {
+      cId: record.id,
+      pId: record.projectId,
+    });
   }
 
   defineExpose({
     getApiCaseSaveParams,
     loadCaseList,
   });
+
+  await tableStore.initColumn(TableKeyEnum.ASSOCIATE_CASE_API_CASE, columns, 'drawer');
 </script>
 
-<style scoped></style>
+<style lang="less" scoped>
+  :deep(.arco-table-cell-align-left) {
+    padding: 0 8px !important;
+  }
+</style>

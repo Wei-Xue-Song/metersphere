@@ -1,8 +1,11 @@
 package io.metersphere.plan.controller;
 
+import com.github.pagehelper.Page;
+import com.github.pagehelper.PageHelper;
 import io.metersphere.api.service.scenario.ApiScenarioLogService;
 import io.metersphere.plan.constants.TestPlanResourceConfig;
 import io.metersphere.plan.domain.TestPlan;
+import io.metersphere.plan.dto.TestPlanExecuteHisDTO;
 import io.metersphere.plan.dto.request.*;
 import io.metersphere.plan.dto.response.TestPlanDetailResponse;
 import io.metersphere.plan.dto.response.TestPlanOperationResponse;
@@ -19,6 +22,7 @@ import io.metersphere.system.log.constants.OperationLogType;
 import io.metersphere.system.notice.annotation.SendNotice;
 import io.metersphere.system.notice.constants.NoticeConstants;
 import io.metersphere.system.security.CheckOwner;
+import io.metersphere.system.utils.PageUtils;
 import io.metersphere.system.utils.Pager;
 import io.metersphere.system.utils.SessionUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +31,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -41,6 +46,8 @@ import java.util.Map;
 public class TestPlanController {
     @Resource
     private TestPlanService testPlanService;
+    @Resource
+    private TestPlanScheduleService testPlanScheduleService;
     @Resource
     private TestPlanManagementService testPlanManagementService;
     @Resource
@@ -163,9 +170,10 @@ public class TestPlanController {
     @RequiresPermissions(PermissionConstants.TEST_PLAN_READ_ADD)
     @CheckOwner(resourceId = "#id", resourceType = "test_plan")
     public TestPlanOperationResponse copy(@PathVariable String id) {
-        return new TestPlanOperationResponse(
-                testPlanService.copy(id, SessionUtils.getUserId())
-        );
+        long copyCount = testPlanService.copy(id, SessionUtils.getUserId());
+        //copy完成之后的刷新一下状态
+        testPlanService.refreshTestPlanStatus(id);
+        return new TestPlanOperationResponse(copyCount);
     }
 
     @PostMapping("/batch-copy")
@@ -196,7 +204,7 @@ public class TestPlanController {
     @Operation(summary = "测试计划-批量归档")
     @RequiresPermissions(PermissionConstants.TEST_PLAN_READ_UPDATE)
     @CheckOwner(resourceId = "#request.getProjectId()", resourceType = "project")
-    public void batchArchived(@Validated @RequestBody TestPlanBatchRequest request) {
+    public void batchArchived(@Validated @RequestBody TestPlanBatchProcessRequest request) {
         testPlanManagementService.checkModuleIsOpen(request.getProjectId(), TestPlanResourceConfig.CHECK_TYPE_PROJECT, Collections.singletonList(TestPlanResourceConfig.CONFIG_TEST_PLAN));
         testPlanService.batchArchived(request, SessionUtils.getUserId());
     }
@@ -239,7 +247,7 @@ public class TestPlanController {
     @CheckOwner(resourceId = "#request.getResourceId()", resourceType = "test_plan")
     public String scheduleConfig(@Validated @RequestBody BaseScheduleConfigRequest request) {
         testPlanManagementService.checkModuleIsOpen(request.getResourceId(), TestPlanResourceConfig.CHECK_TYPE_TEST_PLAN, Collections.singletonList(TestPlanResourceConfig.CONFIG_TEST_PLAN));
-        return testPlanService.scheduleConfig(request, SessionUtils.getUserId());
+        return testPlanScheduleService.scheduleConfig(request, SessionUtils.getUserId());
     }
 
     @GetMapping(value = "/schedule-config-delete/{testPlanId}")
@@ -250,5 +258,15 @@ public class TestPlanController {
     public void deleteScheduleConfig(@PathVariable String testPlanId) {
         testPlanManagementService.checkModuleIsOpen(testPlanId, TestPlanResourceConfig.CHECK_TYPE_TEST_PLAN, Collections.singletonList(TestPlanResourceConfig.CONFIG_TEST_PLAN));
         testPlanService.deleteScheduleConfig(testPlanId);
+    }
+
+    @PostMapping(value = "/his/page")
+    @Operation(summary = "测试计划-执行历史-列表分页查询")
+    @RequiresPermissions(PermissionConstants.TEST_PLAN_READ)
+    @CheckOwner(resourceId = "#request.getTestPlanId()", resourceType = "test_plan")
+    public Pager<List<TestPlanExecuteHisDTO>> pageHis(@Validated @RequestBody TestPlanExecuteHisPageRequest request) {
+        Page<Object> page = PageHelper.startPage(request.getCurrent(), request.getPageSize(),
+                MapUtils.isEmpty(request.getSort()) ? "tpr.create_time desc" : request.getSortString());
+        return PageUtils.setPageInfo(page, testPlanService.listHis(request));
     }
 }

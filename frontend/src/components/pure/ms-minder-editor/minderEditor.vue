@@ -1,102 +1,69 @@
 <template>
   <a-spin :loading="loading" class="ms-minder-editor-container">
-    <div class="flex-1">
-      <minderHeader
-        :sequence-enable="props.sequenceEnable"
-        :tag-enable="props.tagEnable"
-        :progress-enable="props.progressEnable"
-        :priority-count="props.priorityCount"
-        :priority-prefix="props.priorityPrefix"
-        :priority-start-with-zero="props.priorityStartWithZero"
-        :tags="props.tags"
-        :move-enable="props.moveEnable"
-        :move-confirm="props.moveConfirm"
-        :tag-edit-check="props.tagEditCheck"
-        :tag-disable-check="props.tagDisableCheck"
-        :priority-disable-check="props.priorityDisableCheck"
-        :distinct-tags="props.distinctTags"
-        :default-mold="props.defaultMold"
-        :del-confirm="props.delConfirm"
-        :arrange-enable="props.arrangeEnable"
-        :mold-enable="props.moldEnable"
-        :font-enable="props.fontEnable"
-        :style-enable="props.styleEnable"
-        :replaceable-tags="props.replaceableTags"
-        :single-tag="props.singleTag"
-        :insert-node="props.insertNode"
-        :after-tag-edit="props.afterTagEdit"
-        @mold-change="handleMoldChange"
-      />
+    <div class="relative flex-1 overflow-hidden">
       <mainEditor
-        :disabled="props.disabled"
-        :sequence-enable="props.sequenceEnable"
-        :tag-enable="props.tagEnable"
-        :move-enable="props.moveEnable"
-        :move-confirm="props.moveConfirm"
-        :progress-enable="props.progressEnable"
-        :import-json="props.importJson"
-        :height="props.height"
-        :tags="props.tags"
-        :distinct-tags="props.distinctTags"
-        :tag-edit-check="props.tagEditCheck"
-        :tag-disable-check="props.tagDisableCheck"
-        :priority-count="props.priorityCount"
-        :priority-prefix="props.priorityPrefix"
-        :priority-start-with-zero="props.priorityStartWithZero"
-        :insert-node="props.insertNode"
+        v-model:import-json="importJson"
+        v-bind="props"
         @after-mount="() => emit('afterMount')"
         @save="save"
-        @enter-node="handleEnterNode"
-      />
+        @float-menu-close="emit('floatMenuClose')"
+      >
+        <template #extractMenu>
+          <slot name="extractMenu"></slot>
+        </template>
+      </mainEditor>
     </div>
-    <template v-if="props.extractContentTabList?.length">
-      <div class="ms-minder-editor-extra" :class="[extraVisible ? 'ms-minder-editor-extra--visible' : '']">
-        <div class="pl-[16px] pt-[16px]">
-          <MsTab v-model:activeKey="activeExtraKey" :content-tab-list="props.extractContentTabList" mode="button" />
-        </div>
-        <div class="ms-minder-editor-extra-content">
-          <slot name="extractTabContent"></slot>
-        </div>
+    <div class="ms-minder-editor-extra" :class="[extraVisible ? 'ms-minder-editor-extra--visible' : '']">
+      <div v-if="props.extractContentTabList?.length" class="pl-[16px] pt-[16px]">
+        <MsTab v-model:activeKey="activeExtraKey" :content-tab-list="props.extractContentTabList" mode="button" />
       </div>
-    </template>
+      <div class="ms-minder-editor-extra-content">
+        <slot name="extractTabContent"></slot>
+      </div>
+    </div>
   </a-spin>
 </template>
 
 <script lang="ts" name="minderEditor" setup>
   import MsTab from '@/components/pure/ms-tab/index.vue';
-  import minderHeader from './main/header.vue';
   import mainEditor from './main/mainEditor.vue';
 
+  import useMinderStore from '@/store/modules/components/minder-editor/index';
   import { MinderCustomEvent } from '@/store/modules/components/minder-editor/types';
+
+  import { MinderEventName } from '@/enums/minderEnum';
 
   import useMinderEventListener from './hooks/useMinderEventListener';
   import {
     delProps,
     editMenuProps,
-    headerProps,
+    floatMenuProps,
     insertProps,
     mainEditorProps,
     MinderEvent,
+    MinderJson,
     MinderJsonNode,
     moleProps,
     priorityProps,
     tagProps,
     viewMenuProps,
   } from './props';
+  import { isNodeInMinderView } from './script/tool/utils';
 
   const emit = defineEmits<{
     (e: 'moldChange', data: number): void;
-    (e: 'save', data: Record<string, any>): void;
+    (e: 'save', data: MinderJson, callback: () => void): void;
     (e: 'afterMount'): void;
-    (e: 'enterNode', data: MinderJsonNode): void;
     (e: 'nodeSelect', data: MinderJsonNode): void;
-    (e: 'contentChange', data: MinderJsonNode): void;
+    (e: 'contentChange', data?: MinderJsonNode): void;
     (e: 'action', event: MinderCustomEvent): void;
     (e: 'beforeExecCommand', event: MinderEvent): void;
+    (e: 'nodeUnselect'): void;
+    (e: 'floatMenuClose'): void;
   }>();
 
   const props = defineProps({
-    ...headerProps,
+    ...floatMenuProps,
     ...insertProps,
     ...editMenuProps,
     ...mainEditorProps,
@@ -107,6 +74,8 @@
     ...viewMenuProps,
   });
 
+  const minderStore = useMinderStore();
+
   const loading = defineModel<boolean>('loading', {
     default: false,
   });
@@ -116,32 +85,56 @@
   const extraVisible = defineModel<boolean>('extraVisible', {
     default: false,
   });
-
-  onMounted(async () => {
-    window.minderProps = props;
+  const importJson = defineModel<MinderJson>('importJson', {
+    default: () => ({
+      root: {},
+      template: 'default',
+      treePath: [] as any[],
+    }),
   });
 
-  function handleMoldChange(data: number) {
-    emit('moldChange', data);
-  }
+  watch(
+    () => extraVisible.value,
+    (val) => {
+      const node: MinderJsonNode = window.minder.getSelectedNode();
+      if (val && node) {
+        const nodePosition = node?.getRenderBox();
+        // 如果节点不在视图中，将节点移动到视图中
+        if (nodePosition && !isNodeInMinderView(undefined, nodePosition, nodePosition.width / 2)) {
+          setTimeout(() => {
+            window.minder.execCommand('camera', node, 100);
+          }, 300); // 抽屉动画 300ms
+        }
+      }
+    }
+  );
 
-  function save(data: Record<string, any>) {
-    emit('save', data);
-  }
-
-  function handleEnterNode(data: any) {
-    emit('enterNode', data);
+  function save(data: MinderJson, callback: () => void) {
+    emit('save', data, callback);
   }
 
   onMounted(() => {
+    window.minderProps = props;
     useMinderEventListener({
-      handleSelectionChange: () => {
-        const selectedNode: MinderJsonNode = window.minder.getSelectedNode();
-        if (Object.keys(window.minder).length > 0 && selectedNode) {
-          emit('nodeSelect', selectedNode);
+      handleSelectionChange: (node?: MinderJsonNode) => {
+        if (node) {
+          emit('nodeSelect', node);
+          const box = node.getRenderBox();
+          minderStore.dispatchEvent(
+            MinderEventName.NODE_SELECT,
+            undefined,
+            {
+              ...box,
+            },
+            node.rc.node,
+            [node]
+          );
+        } else {
+          emit('nodeUnselect');
+          minderStore.dispatchEvent(MinderEventName.NODE_UNSELECT);
         }
       },
-      handleContentChange: (node: MinderJsonNode) => {
+      handleContentChange: (node?: MinderJsonNode) => {
         emit('contentChange', node);
       },
       handleMinderEvent: (event) => {
@@ -149,6 +142,12 @@
       },
       handleBeforeExecCommand: (event) => {
         emit('beforeExecCommand', event);
+      },
+      handleViewChange() {
+        minderStore.dispatchEvent(MinderEventName.VIEW_CHANGE);
+      },
+      handleDragFinish() {
+        minderStore.dispatchEvent(MinderEventName.DRAG_FINISH);
       },
     });
   });
@@ -158,10 +157,9 @@
   .ms-minder-editor-container {
     @apply relative flex h-full w-full;
     .ms-minder-editor-extra {
-      @apply flex flex-col overflow-hidden border-l;
+      @apply flex flex-col overflow-hidden  bg-white;
 
       width: 0;
-      border-color: var(--color-text-n8);
       transition: all 300ms ease-in-out;
       .ms-minder-editor-extra-content {
         @apply relative  flex-1 overflow-y-auto;
@@ -171,8 +169,11 @@
       }
     }
     .ms-minder-editor-extra--visible {
+      @apply border-l;
+
       width: 35%;
       min-width: 360px;
+      border-color: var(--color-text-n8);
       transition: all 300ms ease-in-out;
       animation: minWidth 300ms ease-in-out;
     }

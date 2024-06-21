@@ -11,7 +11,7 @@
     @filter-change="getModuleCount"
   >
     <template #num="{ record }">
-      <MsButton type="text">{{ record.num }}</MsButton>
+      <MsButton type="text" @click="toDetail(record)">{{ record.num }}</MsButton>
     </template>
     <template #reviewStatus="{ record }">
       <MsIcon
@@ -51,18 +51,22 @@
   import CaseLevel from '@/components/business/ms-case-associate/caseLevel.vue';
   import ExecuteResult from '@/components/business/ms-case-associate/executeResult.vue';
 
-  import { useI18n } from '@/hooks/useI18n';
+  import useOpenNewPage from '@/hooks/useOpenNewPage';
+  import useTableStore from '@/hooks/useTableStore';
 
+  import type { CaseManagementTable } from '@/models/caseManagement/featureCase';
   import type { TableQueryParams } from '@/models/common';
   import { CasePageApiTypeEnum } from '@/enums/associateCaseEnum';
   import { CaseLinkEnum } from '@/enums/caseEnum';
+  import { CaseManagementRouteEnum } from '@/enums/routeEnum';
+  import { SpecialColumnEnum, TableKeyEnum } from '@/enums/tableEnum';
   import { FilterSlotNameEnum } from '@/enums/tableFilterEnum';
 
   import { getPublicLinkCaseListMap } from './utils/page';
   import { casePriorityOptions } from '@/views/api-test/components/config';
   import { executionResultMap, statusIconMap } from '@/views/case-management/caseManagementFeature/components/utils';
 
-  const { t } = useI18n();
+  const { openNewPage } = useOpenNewPage();
 
   const props = defineProps<{
     associationType: string; // 关联类型 项目 | 测试计划 | 用例评审
@@ -80,7 +84,12 @@
     (e: 'getModuleCount', params: TableQueryParams): void;
     (e: 'refresh'): void;
     (e: 'initModules'): void;
+    (e: 'update:selectedIds'): void;
   }>();
+
+  const tableStore = useTableStore();
+
+  const innerSelectedIds = defineModel<string[]>('selectedIds', { required: true });
 
   const reviewResultOptions = computed(() => {
     return Object.keys(statusIconMap).map((key) => {
@@ -110,7 +119,7 @@
         sorter: true,
       },
       fixed: 'left',
-      width: 100,
+      width: 150,
       showTooltip: true,
       columnSelectorDisabled: true,
     },
@@ -179,6 +188,13 @@
       width: 200,
       showDrag: true,
     },
+    {
+      title: '',
+      dataIndex: 'action',
+      width: 24,
+      slotName: SpecialColumnEnum.ACTION,
+      fixed: 'right',
+    },
   ];
 
   const getPageList = computed(() => {
@@ -193,37 +209,48 @@
     return undefined;
   }
 
-  const { propsRes, propsEvent, loadList, setLoadListParams, resetSelector, setPagination, resetFilterParams } =
-    useTable(
-      getPageList.value,
-      {
-        columns,
-        showSetting: false,
-        selectable: true,
-        showSelectAll: true,
-        heightUsed: 310,
-        showSelectorAll: true,
-      },
-      (record) => {
-        return {
-          ...record,
-          caseLevel: getCaseLevel(record),
-          tags: (record.tags || []).map((item: string, i: number) => {
-            return {
-              id: `${record.id}-${i}`,
-              name: item,
-            };
-          }),
-        };
-      }
-    );
+  const {
+    propsRes,
+    propsEvent,
+    loadList,
+    setLoadListParams,
+    resetSelector,
+    setPagination,
+    resetFilterParams,
+    setTableSelected,
+  } = useTable(
+    getPageList.value,
+    {
+      tableKey: TableKeyEnum.ASSOCIATE_CASE,
+      showSetting: true,
+      isSimpleSetting: true,
+      onlyPageSize: true,
+      selectable: true,
+      showSelectAll: true,
+      heightUsed: 310,
+      showSelectorAll: false,
+    },
+    (record) => {
+      return {
+        ...record,
+        caseLevel: getCaseLevel(record),
+        tags: (record.tags || []).map((item: string, i: number) => {
+          return {
+            id: `${record.id}-${i}`,
+            name: item,
+          };
+        }),
+      };
+    }
+  );
 
   async function getTableParams() {
+    const { excludeKeys } = propsRes.value;
     return {
       keyword: props.keyword,
       projectId: props.currentProject,
       moduleIds: props.activeModule === 'all' || !props.activeModule ? [] : [props.activeModule, ...props.offspringIds],
-      excludeIds: [...(props.associatedIds || [])], // 已经存在的关联的id列表
+      excludeIds: [...excludeKeys],
       condition: {
         keyword: props.keyword,
         filter: propsRes.value.filter,
@@ -242,6 +269,11 @@
   }
 
   async function loadCaseList() {
+    if (props.associatedIds && props.associatedIds.length) {
+      props.associatedIds.forEach((hasNotAssociatedId) => {
+        setTableSelected(hasNotAssociatedId);
+      });
+    }
     const tableParams = await getTableParams();
     setLoadListParams(tableParams);
     loadList();
@@ -259,42 +291,51 @@
     const tableParams = getTableParams();
     return {
       ...tableParams,
-      excludeIds: [...excludeKeys].concat(...(props.associatedIds || [])),
+      excludeIds: [...excludeKeys],
       selectIds: selectorStatus === 'all' ? [] : [...selectedKeys],
       selectAll: selectorStatus === 'all',
     };
   }
 
+  // 去功能用例详情页面
+  function toDetail(record: CaseManagementTable) {
+    openNewPage(CaseManagementRouteEnum.CASE_MANAGEMENT_CASE, {
+      id: record.id,
+      pId: record.projectId,
+    });
+  }
+
+  const selectIds = computed(() => {
+    return [...propsRes.value.selectedKeys];
+  });
+
   watch(
-    () => props.activeSourceType,
+    () => selectIds.value,
     (val) => {
-      if (val) {
-        tableRef.value?.initColumn(columns);
-        resetSelector();
-        resetFilterParams();
-        setPagination({
-          current: 1,
-        });
-      }
+      innerSelectedIds.value = val;
     }
   );
 
-  watch(
-    () => props.currentProject,
-    (val) => {
-      if (val) {
-        loadCaseList();
-      }
-    },
-    {
-      immediate: true,
-    }
-  );
+  watch([() => props.currentProject, () => props.activeModule], () => {
+    resetSelector();
+    resetFilterParams();
+    loadCaseList();
+  });
+
+  onMounted(() => {
+    loadCaseList();
+  });
 
   defineExpose({
     getFunctionalSaveParams,
     loadCaseList,
   });
+
+  await tableStore.initColumn(TableKeyEnum.ASSOCIATE_CASE, columns, 'drawer');
 </script>
 
-<style scoped></style>
+<style lang="less" scoped>
+  :deep(.arco-table-cell-align-left) {
+    padding: 0 8px !important;
+  }
+</style>

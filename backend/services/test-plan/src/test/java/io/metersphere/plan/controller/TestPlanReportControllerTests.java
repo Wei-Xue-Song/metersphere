@@ -12,6 +12,7 @@ import io.metersphere.project.domain.ProjectApplicationExample;
 import io.metersphere.project.mapper.ProjectApplicationMapper;
 import io.metersphere.sdk.constants.ProjectApplicationType;
 import io.metersphere.sdk.constants.ShareInfoType;
+import io.metersphere.sdk.constants.TaskTriggerMode;
 import io.metersphere.sdk.util.CommonBeanFactory;
 import io.metersphere.sdk.util.JSON;
 import io.metersphere.system.base.BaseTest;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -49,12 +51,20 @@ public class TestPlanReportControllerTests extends BaseTest {
     private static final String EDIT_PLAN_REPORT = "/test-plan/report/detail/edit";
     private static final String GET_PLAN_REPORT_DETAIL_BUG_PAGE = "/test-plan/report/detail/bug/page";
     private static final String GET_PLAN_REPORT_DETAIL_FUNCTIONAL_PAGE = "/test-plan/report/detail/functional/case/page";
+    private static final String GET_PLAN_REPORT_DETAIL_API_PAGE = "/test-plan/report/detail/api/case/page";
+    private static final String GET_PLAN_REPORT_DETAIL_SCENARIO_PAGE = "/test-plan/report/detail/scenario/case/page";
+    private static final String GET_PLAN_REPORT_DETAIL_PLAN_PAGE = "/test-plan/report/detail/plan/report/page";
     private static final String GEN_AND_SHARE = "/test-plan/report/share/gen";
     private static final String GET_SHARE_INFO = "/test-plan/report/share/get";
     private static final String GET_SHARE_TIME = "/test-plan/report/share/get-share-time";
     private static final String GET_SHARE_REPORT = "/test-plan/report/share/get/detail";
     private static final String GET_SHARE_REPORT_BUG_LIST = "/test-plan/report/share/detail/bug/page";
     private static final String GET_SHARE_REPORT_FUNCTIONAL_LIST = "/test-plan/report/share/detail/functional/case/page";
+    private static final String GET_SHARE_REPORT_API_LIST = "/test-plan/report/share/detail/api/case/page";
+    private static final String GET_SHARE_REPORT_SCENARIO_LIST = "/test-plan/report/share/detail/scenario/case/page";
+    private static final String GET_SHARE_REPORT_PLAN_LIST = "/test-plan/report/share/detail/plan/report/page";
+    private static final String GET_SHARE_REPORT_API_REPORT_LIST = "/test-plan/report/share/detail/api-report";
+    private static final String GET_SHARE_REPORT_SCENARIO_REPORT_LIST = "/test-plan/report/share/detail/scenario-report";
 
     @Autowired
     private TestPlanReportMapper testPlanReportMapper;
@@ -170,7 +180,7 @@ public class TestPlanReportControllerTests extends BaseTest {
 
     @Test
     @Order(8)
-    void testGetShareReportTableList() throws Exception{
+    void testGetShareReportTableList() throws Exception {
         TestPlanShareReportDetailRequest request = new TestPlanShareReportDetailRequest();
         request.setCurrent(1);
         request.setPageSize(10);
@@ -179,14 +189,35 @@ public class TestPlanReportControllerTests extends BaseTest {
         // 获取分享的报告的列表明细
         this.requestPostWithOk(GET_SHARE_REPORT_BUG_LIST, request);
         this.requestPostWithOk(GET_SHARE_REPORT_FUNCTIONAL_LIST, request);
+        this.requestPostWithOk(GET_SHARE_REPORT_API_LIST, request);
+        this.requestPostWithOk(GET_SHARE_REPORT_SCENARIO_LIST, request);
+        this.requestPostWithOk(GET_SHARE_REPORT_PLAN_LIST, request);
         request.setSort(Map.of("num", "asc"));
         this.requestPostWithOk(GET_SHARE_REPORT_BUG_LIST, request);
         this.requestPostWithOk(GET_SHARE_REPORT_FUNCTIONAL_LIST, request);
+        this.requestPostWithOk(GET_SHARE_REPORT_API_LIST, request);
+        this.requestPostWithOk(GET_SHARE_REPORT_SCENARIO_LIST, request);
+
+        mockMvc.perform(getRequestBuilder(GET_SHARE_REPORT_API_REPORT_LIST + "/" + GEN_SHARE_ID + "/" + "test"))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().is5xxServerError());
+
+        mockMvc.perform(getRequestBuilder(GET_SHARE_REPORT_API_REPORT_LIST + "/get/" + GEN_SHARE_ID + "/" + "test" + "/111"))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(getRequestBuilder(GET_SHARE_REPORT_SCENARIO_REPORT_LIST + "/" + GEN_SHARE_ID + "/" + "test"))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().is5xxServerError());
+
+        mockMvc.perform(getRequestBuilder(GET_SHARE_REPORT_SCENARIO_REPORT_LIST + "/get/" + GEN_SHARE_ID + "/" + "test" + "/111"))
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
     }
 
     @Test
     @Order(9)
-    void testGetShareReport() throws Exception{
+    void testGetShareReport() throws Exception {
         // 获取分享的报告
         this.requestGet(GET_SHARE_REPORT + "/" + GEN_SHARE_ID + "/test-plan-report-id-1");
         ProjectApplicationExample example = new ProjectApplicationExample();
@@ -243,15 +274,11 @@ public class TestPlanReportControllerTests extends BaseTest {
         TestPlanReportGenRequest genRequest = new TestPlanReportGenRequest();
         genRequest.setProjectId("100001100001");
         genRequest.setTestPlanId("plan_id_for_gen_report_1");
+        genRequest.setTriggerMode(TaskTriggerMode.MANUAL.name());
         this.requestPost(GEN_PLAN_REPORT, genRequest);
         genRequest.setTestPlanId("plan_id_for_gen_report");
-        MvcResult mvcResult = this.requestPostAndReturn(GEN_PLAN_REPORT, genRequest);
-        String returnData = mvcResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
-        ResultHolder resultHolder = JSON.parseObject(returnData, ResultHolder.class);
-        //返回请求正常
-        Assertions.assertNotNull(resultHolder);
-        TestPlanReport report = JSON.parseObject(JSON.toJSONString(resultHolder.getData()), TestPlanReport.class);
-        GEN_REPORT_ID = report.getId();
+        this.requestPost(GEN_PLAN_REPORT, genRequest);
+        GEN_REPORT_ID = getGenReportId();
     }
 
     @Test
@@ -280,8 +307,13 @@ public class TestPlanReportControllerTests extends BaseTest {
         request.setPageSize(10);
         request.setReportId(GEN_REPORT_ID);
         this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_FUNCTIONAL_PAGE, request);
+        this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_API_PAGE, request);
+        this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_SCENARIO_PAGE, request);
+        this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_PLAN_PAGE, request);
         request.setSort(Map.of("num", "asc"));
         this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_FUNCTIONAL_PAGE, request);
+        this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_API_PAGE, request);
+        this.requestPostWithOk(GET_PLAN_REPORT_DETAIL_SCENARIO_PAGE, request);
     }
 
     @Test
@@ -302,6 +334,14 @@ public class TestPlanReportControllerTests extends BaseTest {
         String fileId = resultHolder.getData().toString();
         request.setRichTextTmpFileIds(List.of(fileId));
         this.requestPostWithOk(EDIT_PLAN_REPORT, request);
+    }
+
+    @Test
+    @Order(18)
+    void testSummaryGroupReport() {
+        testPlanReportService.summaryGroupReport("test-plan-report-id-5");
+        testPlanReportService.summaryGroupReport("test-plan-report-id-7");
+        testPlanReportService.summaryGroupReport("test-plan-report-id-9");
     }
 
     @Resource
@@ -355,5 +395,16 @@ public class TestPlanReportControllerTests extends BaseTest {
         attachment.setCreateUser("admin");
         attachment.setCreateTime(System.currentTimeMillis());
         reportAttachmentMapper.insert(attachment);
+    }
+
+    /**
+     * 获取生成的报告ID
+     *
+     * @return 报告ID
+     */
+    private String getGenReportId() {
+        TestPlanReportExample example = new TestPlanReportExample();
+        example.createCriteria().andTestPlanIdEqualTo("plan_id_for_gen_report");
+        return testPlanReportMapper.selectByExample(example).get(0).getId();
     }
 }

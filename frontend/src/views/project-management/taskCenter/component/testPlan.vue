@@ -28,7 +28,7 @@
           type="text"
           class="one-line-text w-full"
           :class="[hasJumpPermission ? 'text-[rgb(var(--primary-5))]' : '']"
-          @click="showDetail()"
+          @click="showDetail(record.resourceId)"
           >{{ record.resourceNum }}
         </div>
       </template>
@@ -37,7 +37,7 @@
           v-if="!record.integrated"
           class="one-line-text max-w-[300px]"
           :class="[hasJumpPermission ? 'text-[rgb(var(--primary-5))]' : '']"
-          @click="showDetail()"
+          @click="showDetail(record.resourceId)"
           >{{ record.resourceName }}
         </div>
       </template>
@@ -75,7 +75,7 @@
             <MsButton
               class="!mr-0"
               :disabled="record.historyDeleted || !hasAnyPermission(permissionsMap[props.group].report)"
-              @click="viewReport(record.id)"
+              @click="viewReport(record.id, record.integrated)"
               >{{ t('project.taskCenter.viewReport') }}
             </MsButton>
           </a-tooltip>
@@ -84,7 +84,7 @@
           <MsButton
             class="!mr-0"
             :disabled="record.historyDeleted || !hasAnyPermission(permissionsMap[props.group].report)"
-            @click="viewReport(record.id)"
+            @click="viewReport(record.id, record.integrated)"
             >{{ t('project.taskCenter.viewReport') }}
           </MsButton>
         </div>
@@ -95,7 +95,7 @@
             ['RUNNING', 'RERUNNING'].includes(record.execStatus) && hasAnyPermission(permissionsMap[props.group].stop)
           "
           class="!mr-0"
-          @click="stop()"
+          @click="stop(record)"
           >{{ t('project.taskCenter.stop') }}
         </MsButton>
       </template>
@@ -105,6 +105,7 @@
 
 <script setup lang="ts">
   import { computed, ref } from 'vue';
+  import { Message } from '@arco-design/web-vue';
   import dayjs from 'dayjs';
 
   import MsButton from '@/components/pure/ms-button/index.vue';
@@ -115,11 +116,18 @@
   import ExecutionStatus from '@/views/test-plan/report/component/reportStatus.vue';
 
   import {
+    batchStopRealOrgPlan,
+    batchStopRealProPlan,
+    batchStopRealSysPlan,
     getRealOrgPlanList,
     getRealProPlanList,
     getRealSysPlanList,
+    stopRealOrgPlan,
+    stopRealProPlan,
+    stopRealSysPlan,
   } from '@/api/modules/project-management/taskCenter';
   import { useI18n } from '@/hooks/useI18n';
+  import useModal from '@/hooks/useModal';
   import useOpenNewPage from '@/hooks/useOpenNewPage';
   import { useTableStore } from '@/store';
   import { characterLimit } from '@/utils';
@@ -138,6 +146,7 @@
   const { openNewPage } = useOpenNewPage();
 
   const tableStore = useTableStore();
+  const { openModal } = useModal();
 
   const { t } = useI18n();
   const props = defineProps<{
@@ -167,12 +176,18 @@
   const loadRealMap = ref({
     system: {
       list: getRealSysPlanList,
+      stop: stopRealSysPlan,
+      batchStop: batchStopRealSysPlan,
     },
     organization: {
       list: getRealOrgPlanList,
+      stop: stopRealOrgPlan,
+      batchStop: batchStopRealOrgPlan,
     },
     project: {
       list: getRealProPlanList,
+      stop: stopRealProPlan,
+      batchStop: batchStopRealProPlan,
     },
   });
   const hasJumpPermission = computed(() => hasAnyPermission(permissionsMap[props.group].jump));
@@ -285,15 +300,6 @@
       showDrag: true,
     },
     {
-      title: 'project.taskCenter.resourcePool',
-      slotName: 'poolName',
-      dataIndex: 'poolName',
-      showInTable: true,
-      showDrag: true,
-      showTooltip: true,
-      width: 200,
-    },
-    {
       title: 'project.taskCenter.operator',
       slotName: 'operationName',
       dataIndex: 'operationName',
@@ -371,26 +377,88 @@
     excludeIds: [] as string[],
     condition: {},
   });
+  function batchStopRealTask() {
+    openModal({
+      type: 'warning',
+      title: t('project.taskCenter.batchStopTask', { num: batchParams.value.currentSelectCount }),
+      content: t('project.taskCenter.stopTaskContent'),
+      okText: t('project.taskCenter.confirmStop'),
+      cancelText: t('common.cancel'),
+      okButtonProps: {
+        status: 'danger',
+      },
+      onBeforeOk: async () => {
+        try {
+          const { selectIds, selectAll, excludeIds } = batchParams.value;
+          await loadRealMap.value[props.group].batchStop({
+            selectIds: selectIds || [],
+            selectAll,
+            excludeIds: excludeIds || [],
+            condition: {
+              keyword: keyword.value,
+              filter: {
+                ...propsRes.value.filter,
+              },
+            },
+          });
+          resetSelector();
+          Message.success(t('project.taskCenter.stopSuccess'));
+          initData();
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.log(error);
+        }
+      },
+      hideCancel: false,
+    });
+  }
 
   function handleTableBatch(event: BatchActionParams, params: BatchActionQueryParams) {
     batchParams.value = { ...params, selectIds: params?.selectedIds || [], condition: params?.condition || {} };
     if (event.eventTag === 'batchStop') {
-      // TODO
+      batchStopRealTask();
     }
   }
 
-  function viewReport(id: string) {
+  function viewReport(id: string, type: boolean) {
     openNewPage(RouteEnum.TEST_PLAN_REPORT_DETAIL, {
+      id,
+      type: type ? 'GROUP' : 'TEST_PLAN',
+    });
+  }
+
+  function showDetail(id: string) {
+    if (!hasJumpPermission.value) {
+      return;
+    }
+    openNewPage(RouteEnum.TEST_PLAN_INDEX_DETAIL, {
       id,
     });
   }
 
-  function showDetail() {
-    // TODO
-  }
-
-  function stop() {
-    // TODO
+  function stop(record: any) {
+    openModal({
+      type: 'warning',
+      title: t('project.taskCenter.stopTask', { name: characterLimit(record.resourceName) }),
+      content: t('project.taskCenter.stopTaskContent'),
+      okText: t('project.taskCenter.confirmStop'),
+      cancelText: t('common.cancel'),
+      okButtonProps: {
+        status: 'danger',
+      },
+      onBeforeOk: async () => {
+        try {
+          await loadRealMap.value[props.group].stop(record.id);
+          resetSelector();
+          Message.success(t('project.taskCenter.stopSuccess'));
+          initData();
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.log(error);
+        }
+      },
+      hideCancel: false,
+    });
   }
 
   function searchList() {

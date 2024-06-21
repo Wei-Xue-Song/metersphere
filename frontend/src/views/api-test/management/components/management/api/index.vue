@@ -4,7 +4,7 @@
       <apiTable
         :active-module="props.activeModule"
         :offspring-ids="props.offspringIds"
-        :protocol="props.protocol"
+        :selected-protocols="props.selectedProtocols"
         :refresh-time-stamp="refreshTableTimeStamp"
         :member-options="memberOptions"
         @open-api-tab="(record, isExecute) => openApiTab({ apiInfo: record, isCopy: false, isExecute })"
@@ -99,7 +99,7 @@
             ref="caseTableRef"
             :is-api="true"
             :active-module="props.activeModule"
-            :protocol="activeApiTab.protocol"
+            :selected-protocols="[activeApiTab.protocol]"
             :api-detail="activeApiTab"
             :offspring-ids="props.offspringIds"
             :member-options="memberOptions"
@@ -116,7 +116,7 @@
             :active-module="props.activeModule"
             :offspring-ids="props.offspringIds"
             :definition-detail="activeApiTab"
-            :protocol="activeApiTab.protocol"
+            :selected-protocols="[activeApiTab.protocol]"
             :height-used="48"
             is-api
             @debug="openApiTabAndDebugMock"
@@ -188,7 +188,7 @@
     activeModule: string;
     offspringIds: string[];
     moduleTree: ModuleTreeNode[]; // 模块树
-    protocol: string;
+    selectedProtocols: string[];
     currentTab: string;
     memberOptions: { label: string; value: string }[];
   }>();
@@ -226,12 +226,13 @@
   });
 
   const initDefaultId = `definition-${Date.now()}`;
+  const localProtocol = localStorage.getItem('currentProtocol');
   const defaultDefinitionParams: RequestParam = {
     type: 'api',
     definitionActiveKey: 'definition',
     id: initDefaultId,
     moduleId: props.activeModule === 'all' ? 'root' : props.activeModule,
-    protocol: 'HTTP',
+    protocol: localProtocol || 'HTTP',
     tags: [],
     status: RequestDefinitionStatus.PROCESSING,
     description: '',
@@ -299,6 +300,7 @@
 
   function addApiTab(defaultProps?: Partial<TabItem>) {
     const id = `definition-${Date.now()}`;
+    const protocol = localStorage.getItem('currentProtocol');
     apiTabs.value.push({
       ...cloneDeep(defaultDefinitionParams),
       moduleId: props.activeModule === 'all' ? 'root' : props.activeModule,
@@ -306,6 +308,7 @@
       id,
       isNew: !defaultProps?.id, // 新开的tab标记为前端新增的调试，因为此时都已经有id了；但是如果是查看打开的会有携带id
       definitionActiveKey: !defaultProps ? 'definition' : 'preview',
+      protocol: protocol || activeApiTab.value.protocol || defaultDefinitionParams.protocol, // 新开的tab默认使用当前激活的tab的协议
       ...defaultProps,
     });
     activeApiTab.value = apiTabs.value[apiTabs.value.length - 1];

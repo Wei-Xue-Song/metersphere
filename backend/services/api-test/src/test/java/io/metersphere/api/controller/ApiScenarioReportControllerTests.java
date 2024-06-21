@@ -362,7 +362,7 @@ public class ApiScenarioReportControllerTests extends BaseTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().is5xxServerError());
 
-        mockMvc.perform(getRequestBuilder(GET + "scenario-report-id2000"))
+        mockMvc.perform(getRequestBuilder(GET + "scenario-report-id200000"))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().is5xxServerError());
 
@@ -474,7 +474,7 @@ public class ApiScenarioReportControllerTests extends BaseTest {
 
         mockMvc.perform(getRequestBuilder("/api/report/share/get/" + "test"))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().is5xxServerError());
+                .andExpect(status().isOk());
 
         mvcResult = this.requestGetWithOk(BASIC + "/share/detail/" + shareId + "/" + "test-scenario-report-id" + "/" + "test-scenario-report-step-id1")
                 .andReturn();

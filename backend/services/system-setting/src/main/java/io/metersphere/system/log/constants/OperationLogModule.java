@@ -154,8 +154,11 @@ public class OperationLogModule {
     public static final String BUG_MANAGEMENT_RECYCLE = "BUG_MANAGEMENT_BUG_RECYCLE";
     //测试计划
     public static final String TEST_PLAN = "TEST_PLAN";
+    public static final String TEST_PLAN_TEST_PLAN = "TEST_PLAN_PLAN";
+    public static final String TEST_PLAN_TEST_PLAN_GROUP = "TEST_PLAN_GROUP";
     public static final String TEST_PLAN_MODULE = "TEST_PLAN_MODULE";
-    public static final String TEST_PLAN_REPORT = "TEST_PLAN_REPORT";
+    public static final String TEST_PLAN_REPORT = "TEST_PLAN_REPORT_TEST_PLAN";
+    public static final String TEST_PLAN_GROUP_REPORT = "TEST_PLAN_REPORT_TEST_PLAN_GROUP";
 
     // 个人信息-基本信息
     public static final String PERSONAL_INFORMATION_BASE_INFO = "PERSONAL_INFORMATION_BASE_INFO";

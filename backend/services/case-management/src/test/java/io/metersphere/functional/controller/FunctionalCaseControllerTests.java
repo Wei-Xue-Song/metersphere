@@ -520,7 +520,7 @@ public class FunctionalCaseControllerTests extends BaseTest {
             Assertions.assertTrue(moduleCount.containsKey("all"));
 
             //不开启用例重复的测试计划入库，再次调用
-            testPlanConfigMapper.insert(testPlanConfig);
+            testPlanConfigMapper.insertSelective(testPlanConfig);
 
             mvcResult = this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_MODULE_COUNT, request);
             returnData = mvcResult.getResponse().getContentAsString(StandardCharsets.UTF_8);
@@ -533,7 +533,7 @@ public class FunctionalCaseControllerTests extends BaseTest {
 
             //开启用例重复的测试计划，再次调用
             testPlanConfig.setRepeatCase(true);
-            testPlanConfigMapper.updateByPrimaryKey(testPlanConfig);
+            testPlanConfigMapper.updateByPrimaryKeySelective(testPlanConfig);
 
             mvcResult = this.requestPostWithOkAndReturn(FUNCTIONAL_CASE_MODULE_COUNT, request);
             returnData = mvcResult.getResponse().getContentAsString(StandardCharsets.UTF_8);

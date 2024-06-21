@@ -4,7 +4,7 @@
       <div
         v-for="item of menuTab"
         :key="item.value"
-        :class="`${activeTask === item.value ? 'active' : ''} item flex items-center`"
+        :class="`${activeTask === item.value ? 'active' : ''} item`"
         @click="toggleTask(item.value)"
       >
         <div class="mr-2">
@@ -199,11 +199,14 @@
       height: 100%;
       border-right: 1px solid var(--color-text-n8);
       .item {
+        display: flex;
+        align-items: center;
         padding: 0 20px;
         height: 38px;
         font-size: 14px;
         border-radius: 4px;
         cursor: pointer;
+        line-height: 38px;
         &.active {
           color: rgb(var(--primary-5));
           background: rgb(var(--primary-1));

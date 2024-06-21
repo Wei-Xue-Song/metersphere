@@ -33,7 +33,7 @@
               allow-clear
               :max-length="255"
             ></a-input>
-            <a-tooltip :content="isExpandAll ? t('apiScenario.collapseAll') : t('ms.comment.expandAllModule')">
+            <a-tooltip :content="isExpandAll ? t('common.collapseAllSubModule') : t('common.expandAllSubModule')">
               <a-button
                 type="outline"
                 class="expand-btn arco-btn-outline--secondary"
@@ -85,6 +85,7 @@
           :file-all-count-by-storage="fileAllCountByStorage"
           :filetype="props.filetype"
           @init="handleModuleTableInit"
+          @update-file-ids="updateFiles"
         />
       </template>
     </MsSplitBox>
@@ -121,7 +122,7 @@
   }>();
 
   const emit = defineEmits<{
-    (e: 'save', val: AssociatedList[]): void;
+    (e: 'save', val: AssociatedList[], selectIds?: string[]): void;
     (e: 'update:visible', val: boolean): void;
   }>();
   const showDrawer = computed({
@@ -244,9 +245,14 @@
   }
 
   const selectFile = ref<AssociatedList[]>([]);
+  const selectIds = ref<string[]>([]);
+
+  function updateFiles(fileIds: string[]) {
+    selectIds.value = fileIds;
+  }
 
   function handleDrawerConfirm() {
-    emit('save', selectFile.value);
+    emit('save', selectFile.value, selectIds.value);
     showDrawer.value = false;
   }
 

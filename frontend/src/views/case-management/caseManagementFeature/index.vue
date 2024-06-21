@@ -40,11 +40,7 @@
                 <div class="folder-count">({{ modulesCount.all || 0 }})</div></div
               >
               <div class="ml-auto flex items-center">
-                <a-tooltip
-                  :content="
-                    isExpandAll ? t('project.fileManagement.collapseAll') : t('project.fileManagement.expandAll')
-                  "
-                >
+                <a-tooltip :content="isExpandAll ? t('common.expandAllSubModule') : t('common.collapseAllSubModule')">
                   <MsButton type="icon" status="secondary" class="!mr-0 p-[4px]" @click="expandHandler">
                     <MsIcon :type="isExpandAll ? 'icon-icon_folder_collapse1' : 'icon-icon_folder_expansion1'" />
                   </MsButton>
@@ -260,10 +256,11 @@
    * 设置根模块名称列表
    * @param names 根模块名称列表
    */
-  function setRootModules(names: string[], isSetDefaultKey: boolean) {
+  function setRootModules(names: string[], isDelete = false) {
     rootModulesName.value = names;
-    if (isSetDefaultKey) {
-      activeFolder.value = 'all';
+    if (isDelete) {
+      caseTreeRef.value?.initModules(true);
+      caseTableRef.value?.initData();
     }
   }
 
@@ -284,7 +281,10 @@
   /**
    * 右侧表格数据刷新后，若当前展示的是模块，则刷新模块树的统计数量
    */
-  function initModulesCount(params: TableQueryParams) {
+  function initModulesCount(params: TableQueryParams, refreshModule = false) {
+    if (refreshModule) {
+      caseTreeRef.value.initModules();
+    }
     featureCaseStore.getCaseModulesCount(params);
     featureCaseStore.getRecycleModulesCount(params);
     tableFilterParams.value = { ...params };

@@ -21,6 +21,7 @@ export default {
   message: {
     'menu.workbench': 'Workbench',
     'menu.testPlan': 'Test Plan',
+    'menu.testPlanGroup': 'Planning groups',
     'menu.testPlanShort': 'Plan',
     'menu.testPlan.testPlanDetail': 'Test plan details',
     'menu.bugManagement': 'Bug',
@@ -40,6 +41,8 @@ export default {
     'menu.apiTest.apiScenario': 'Scenario',
     'menu.apiTest.scenario.recycle': 'Recycle',
     'menu.apiTest.report': 'Report',
+    'menu.apiTest.reportTestPlan': 'Test report',
+    'menu.apiTest.reportTestGroupPlan': 'Test Group Report',
     'menu.apiTest.reportDetail': 'Report Detail',
     'menu.uiTest': 'UI Test',
     'menu.performanceTest': 'Performance Test',

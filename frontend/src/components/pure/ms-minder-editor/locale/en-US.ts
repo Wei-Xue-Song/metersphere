@@ -76,7 +76,7 @@ export default {
         amplification: 'Amplification',
         narrow: 'Narrow',
         drag: 'Drag',
-        locating_root: 'Locating root node',
+        locating_root: 'Back to the central node',
         navigator: 'Navigator',
       },
       history: {
@@ -101,8 +101,8 @@ export default {
     hotboxMenu: {
       expand: 'Expand/Collapse',
       insetParent: 'Insert one level up',
-      insetSon: 'Insert next level',
-      insetBrother: 'Insert sibling',
+      insetSon: 'Add next level',
+      insetBrother: 'Add sibling',
       copy: 'Copy',
       cut: 'Cut',
       paste: 'Paste',
@@ -110,5 +110,8 @@ export default {
       enterNode: 'Enter the current node',
     },
     loading: 'Mind map loading...',
+    shortcut: 'Shortcut',
+    shortcutTitle: 'Shortcut information',
+    expand: 'Expand/Collapse',
   },
 };

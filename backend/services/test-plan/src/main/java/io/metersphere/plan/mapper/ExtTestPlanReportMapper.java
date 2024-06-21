@@ -1,11 +1,16 @@
 package io.metersphere.plan.mapper;
 
+import io.metersphere.api.dto.definition.ExecuteReportDTO;
+import io.metersphere.api.dto.report.ReportDTO;
 import io.metersphere.plan.domain.TestPlanReport;
 import io.metersphere.plan.dto.request.TestPlanReportBatchRequest;
+import io.metersphere.plan.dto.request.TestPlanReportDetailPageRequest;
 import io.metersphere.plan.dto.request.TestPlanReportPageRequest;
+import io.metersphere.plan.dto.response.TestPlanReportDetailResponse;
 import io.metersphere.plan.dto.response.TestPlanReportPageResponse;
 import io.metersphere.system.dto.sdk.ApiReportMessageDTO;
 import io.metersphere.system.dto.taskcenter.TaskCenterDTO;
+import io.metersphere.system.dto.taskcenter.request.TaskCenterBatchRequest;
 import io.metersphere.system.dto.taskcenter.request.TaskCenterPageRequest;
 import org.apache.ibatis.annotations.Param;
 
@@ -42,4 +47,20 @@ public interface ExtTestPlanReportMapper {
     List<TaskCenterDTO> taskCenterlist(@Param("request") TaskCenterPageRequest request, @Param("projectIds") List<String> projectIds,
                                        @Param("startTime") long startTime, @Param("endTime") long endTime);
 
+    List<TestPlanReportDetailResponse> getPlanReportListById(@Param("request") TestPlanReportDetailPageRequest request);
+
+    List<ReportDTO> getReports(@Param("request") TaskCenterBatchRequest request, @Param("projectIds") List<String> projectIds,
+                               @Param("ids") List<String> ids, @Param("startTime") long startTime, @Param("endTime") long endTime);
+
+    List<ExecuteReportDTO> getHistoryDeleted(@Param("ids") List<String> ids);
+
+    List<ReportDTO> selectByParentIds(@Param("ids") List<String> ids);
+
+    List<ReportDTO> getCaseReports(@Param("ids") List<String> ids);
+
+    List<ReportDTO> getScenarioReports(@Param("ids") List<String> ids);
+
+    void batchUpdateExecuteTimeAndStatus(@Param("startTime") long startTime, @Param("ids") List<String> ids);
+
+    List<ReportDTO> getReportsByIds(@Param("ids") List<String> ids);
 }

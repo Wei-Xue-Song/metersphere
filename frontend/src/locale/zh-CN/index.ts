@@ -20,6 +20,7 @@ export default {
   message: {
     'menu.workbench': '工作台',
     'menu.testPlan': '测试计划',
+    'menu.testPlanGroup': '计划组',
     'menu.testPlanShort': '计划',
     'menu.testPlan.testPlanDetail': '测试计划详情',
     'menu.bugManagement': '缺陷管理',
@@ -39,6 +40,8 @@ export default {
     'menu.apiTest.scenario': '场景',
     'menu.apiTest.scenario.recycle': '回收站',
     'menu.apiTest.report': '报告',
+    'menu.apiTest.reportTestPlan': '测试报告',
+    'menu.apiTest.reportTestGroupPlan': '测试组报告',
     'menu.apiTest.reportDetail': '报告详情',
     'menu.uiTest': 'UI测试',
     'menu.workstation': '工作台',

@@ -629,19 +629,6 @@
       label: t('apiTestDebug.setting'),
     },
   ];
-  const restNumApi = computed(
-    () =>
-      filterKeyValParams(props.apiDetail?.rest ?? props.apiDetail?.request.rest, defaultRequestParamsItem).validParams
-        .length
-  );
-  const queryNumApi = computed(
-    () =>
-      filterKeyValParams(props.apiDetail?.query ?? props.apiDetail?.request.query, defaultRequestParamsItem).validParams
-        .length
-  );
-  const bodyTabBadgeApi = computed(() =>
-    props.apiDetail?.request?.body?.bodyType !== RequestBodyFormat.NONE ? '1' : ''
-  );
   // 根据协议类型获取请求内容tab
   const contentTabList = computed(() => {
     // HTTP 协议 tabs
@@ -793,7 +780,7 @@
   /**
    * 设置插件表单数据
    */
-  function setPluginFormData() {
+  async function setPluginFormData() {
     const tempForm = temporaryPluginFormMap[requestVModel.value.id];
     if (tempForm || !requestVModel.value.isNew || requestVModel.value.isCopy) {
       // 如果缓存的表单数据存在或者是编辑状态，则需要将之前的输入数据填充
@@ -822,6 +809,7 @@
         isInitPluginForm.value = true;
       });
     }
+    await nextTick();
   }
 
   const pluginError = ref(false);
@@ -836,7 +824,7 @@
     pluginError.value = false;
     isInitPluginForm.value = false;
     if (pluginScriptMap.value[requestVModel.value.protocol] !== undefined) {
-      setPluginFormData();
+      await setPluginFormData();
       // 已经初始化过
       return;
     }
@@ -844,7 +832,7 @@
       pluginLoading.value = true;
       const res = await getPluginScript(pluginId);
       pluginScriptMap.value[requestVModel.value.protocol] = res;
-      setPluginFormData();
+      await setPluginFormData();
     } catch (error) {
       // eslint-disable-next-line no-console
       console.log(error);
@@ -867,6 +855,7 @@
         requestVModel.value.method = RequestMethods.GET;
       }
     }
+    localStorage.setItem('currentProtocol', requestVModel.value.protocol);
     handleActiveDebugChange();
   }
 
@@ -1164,6 +1153,20 @@
     requestVModel.value.executeLoading = false;
   }
 
+  function setDefaultActiveTab() {
+    if (requestVModel.value.body.bodyType !== RequestBodyFormat.NONE) {
+      requestVModel.value.activeTab = RequestComposition.BODY;
+    } else if (requestVModel.value.query.length > 0) {
+      requestVModel.value.activeTab = RequestComposition.QUERY;
+    } else if (requestVModel.value.rest.length > 0) {
+      requestVModel.value.activeTab = RequestComposition.REST;
+    } else if (requestVModel.value.headers.length > 0) {
+      requestVModel.value.activeTab = RequestComposition.HEADER;
+    } else {
+      requestVModel.value.activeTab = RequestComposition.BODY;
+    }
+  }
+
   watch(
     () => requestVModel.value.id,
     async () => {
@@ -1178,23 +1181,24 @@
           await initProtocolList();
         }
         await initPluginScript();
-      } else if (protocolOptions.value.length === 0) {
-        await initProtocolList();
-      }
-      if (
-        props.isCase &&
-        requestVModel.value.protocol === 'HTTP' &&
-        (restNumApi.value || queryNumApi.value || bodyTabBadgeApi.value?.length)
-      ) {
-        // 如果定义有参数BODY/QUERY/REST，用例默认tab是参数tab
-        requestVModel.value.activeTab = contentTabList.value[1].value;
+      } else {
+        setDefaultActiveTab();
+        if (protocolOptions.value.length === 0) {
+          await initProtocolList();
+        }
       }
       if (!props.isCase) {
         responseRef.value?.setActiveResponse(requestVModel.value.mode === 'debug' ? 'result' : 'content');
       }
       if (props.request.isExecute && !requestVModel.value.executeLoading) {
         // 如果是执行操作打开接口详情，且该接口不在执行状态中，则立即执行
-        execute(isPriorityLocalExec.value ? 'localExec' : 'serverExec');
+        if (requestVModel.value.protocol !== 'HTTP') {
+          setTimeout(() => {
+            execute(isPriorityLocalExec.value ? 'localExec' : 'serverExec');
+          }, 100);
+        } else {
+          execute(isPriorityLocalExec.value ? 'localExec' : 'serverExec');
+        }
       } else if (temporaryResponseMap[props.request.reportId]) {
         // 如果有缓存的报告未读取，则直接赋值
         requestVModel.value.response = temporaryResponseMap[props.request.reportId];

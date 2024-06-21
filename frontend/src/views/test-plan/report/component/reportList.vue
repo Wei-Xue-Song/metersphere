@@ -3,8 +3,8 @@
     <div class="mb-4 flex items-center justify-between">
       <a-radio-group v-model:model-value="showType" type="button" class="file-show-type" @change="changeShowType">
         <a-radio value="All">{{ t('report.all') }}</a-radio>
-        <a-radio value="INDEPENDENT">{{ t('report.independent') }}</a-radio>
-        <a-radio value="INTEGRATED">{{ t('report.collection') }}</a-radio>
+        <a-radio value="INDEPENDENT">{{ t('report.detail.testReport') }}</a-radio>
+        <a-radio value="INTEGRATED">{{ t('report.detail.testPlanGroupReport') }}</a-radio>
       </a-radio-group>
       <div class="items-right flex gap-[8px]">
         <a-input-search
@@ -36,10 +36,19 @@
         <div
           type="text"
           class="one-line-text flex w-full text-[rgb(var(--primary-5))]"
-          @click="showReportDetail(record.id)"
+          @click="showReportDetail(record.id, record.integrated)"
         >
           {{ characterLimit(record.name) }}
         </div>
+      </template>
+      <template #integrated="{ record }">
+        <MsTag theme="light" :type="record.integrated ? 'primary' : undefined">
+          {{
+            record.integrated
+              ? t('report.detail.testPlanGroupReport')
+              : t('report.detail.testReport')
+          }}
+        </MsTag>
       </template>
 
       <!-- 通过率 -->
@@ -56,7 +65,7 @@
       </template>
       <template #passRate="{ record }">
         <div class="text-[var(--color-text-1)]">
-          {{ `${record.passRate}%` }}
+          {{ `${record.passRate || '0.00'}%` }}
         </div>
       </template>
       <!-- 执行状态筛选 -->
@@ -101,6 +110,7 @@
   import MsBaseTable from '@/components/pure/ms-table/base-table.vue';
   import type { BatchActionParams, BatchActionQueryParams, MsTableColumn } from '@/components/pure/ms-table/type';
   import useTable from '@/components/pure/ms-table/useTable';
+  import MsTag from '@/components/pure/ms-tag/ms-tag.vue';
   import ExecStatus from '@/views/test-plan/report/component/execStatus.vue';
   import ExecutionStatus from '@/views/test-plan/report/component/reportStatus.vue';
 
@@ -181,9 +191,15 @@
         sortDirections: ['ascend', 'descend'],
         sorter: true,
       },
-      ellipsis: true,
       showDrag: false,
       columnSelectorDisabled: true,
+    },
+    {
+      title: 'report.type',
+      slotName: 'integrated',
+      dataIndex: 'integrated',
+      width: 150,
+      showDrag: true,
     },
     {
       title: 'report.plan.name',
@@ -192,7 +208,6 @@
       width: 200,
       showInTable: true,
       showTooltip: true,
-      ellipsis: true,
       showDrag: true,
       columnSelectorDisabled: true,
     },
@@ -420,18 +435,19 @@
   /**
    * 报告详情 showReportDetail
    */
-  function showReportDetail(id: string) {
+  function showReportDetail(id: string, type: boolean) {
     router.push({
       name: TestPlanRouteEnum.TEST_PLAN_REPORT_DETAIL,
       query: {
         id,
+        type: type ? 'GROUP' : 'TEST_PLAN',
       },
     });
   }
 
   onBeforeMount(() => {
     if (route.query.id) {
-      showReportDetail(route.query.id as string);
+      showReportDetail(route.query.id as string, route.query.type === 'GROUP');
     }
     initData();
   });

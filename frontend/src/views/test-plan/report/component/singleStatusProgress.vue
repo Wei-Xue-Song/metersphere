@@ -16,7 +16,7 @@
               <div>{{ t('testPlan.testPlanIndex.TotalCases') }}</div>
             </td>
             <td class="-ml-[2px] font-medium">
-              {{ props.detail.caseTotal || 0 }}
+              {{ countTotal || 0 }}
             </td>
           </tr>
           <tr v-if="props.status === 'pending'" class="popover-tr">
@@ -65,6 +65,18 @@
               {{ statusExecuteRate.blockRateResult }}
             </td>
           </tr>
+          <tr v-if="props.status === 'fakeError'" class="popover-tr">
+            <td class="popover-label-td">
+              <div class="mb-[2px] mr-[4px] h-[6px] w-[6px] rounded-full bg-[rgb(var(--warning-6))]"></div>
+              <div>{{ t('common.fail') }}</div>
+            </td>
+            <td class="popover-value-td-count">
+              {{ addCommasToNumber(countDetailData.fakeError) }}
+            </td>
+            <td class="popover-value-td-pass">
+              {{ statusExecuteRate.errorRateResult }}
+            </td>
+          </tr>
           <tr v-if="props.status === 'error'" class="popover-tr">
             <td class="popover-label-td">
               <div class="mb-[2px] mr-[4px] h-[6px] w-[6px] rounded-full bg-[rgb(var(--danger-6))]"></div>
@@ -84,20 +96,20 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
-
   import MsColorLine from '@/components/pure/ms-color-line/index.vue';
 
-  import { statusConfig } from '@/config/testPlan';
+  import { defaultCount, statusConfig } from '@/config/testPlan';
   import { useI18n } from '@/hooks/useI18n';
   import { addCommasToNumber } from '@/utils';
 
-  import type { countDetail, PlanReportDetail } from '@/models/testPlan/testPlanReport';
+  import type { AnalysisType, countDetail, PlanReportDetail } from '@/models/testPlan/testPlanReport';
 
   const { t } = useI18n();
+
   const props = defineProps<{
     detail: PlanReportDetail;
     status: keyof countDetail;
+    type: AnalysisType;
   }>();
 
   const defaultStatus = {
@@ -113,8 +125,25 @@
     return statusConfig.find((e) => e.value === props.status) || defaultStatus;
   });
 
+  const analysisTypeMap: Record<AnalysisType, keyof PlanReportDetail> = {
+    FUNCTIONAL: 'functionalCount',
+    API: 'apiCaseCount',
+    SCENARIO: 'apiScenarioCount',
+  };
+
   const countDetailData = computed(() => {
-    return props.detail.functionalCount;
+    const countKey = analysisTypeMap[props.type] as keyof PlanReportDetail;
+    return props.detail[countKey] ? (props.detail[countKey] as countDetail) : defaultCount;
+  });
+
+  const countTotal = computed(() => {
+    return (
+      countDetailData.value.pending +
+      countDetailData.value.success +
+      countDetailData.value.error +
+      countDetailData.value.block +
+      countDetailData.value.fakeError
+    );
   });
 
   const colorData = computed(() => {
@@ -128,19 +157,19 @@
     }
     return [
       {
-        percentage: (countDetailData.value[props.status] / props.detail.caseTotal) * 100,
+        percentage: (countDetailData.value[props.status] / countTotal.value) * 100,
         color: statusObject.value.color,
       },
     ];
   });
 
   const getPassRate = computed(() => {
-    const result = (countDetailData.value[props.status] / props.detail.caseTotal) * 100;
+    const result = (countDetailData.value[props.status] / countTotal.value) * 100;
     return `${Number.isNaN(result) ? 0 : result.toFixed(2)}%`;
   });
 
   const calculateRate = (count: number) => {
-    const rate = (count / props.detail.caseTotal) * 100;
+    const rate = (count / countTotal.value) * 100;
     return `${Number.isNaN(rate) ? 0 : rate.toFixed(2)}%`;
   };
 

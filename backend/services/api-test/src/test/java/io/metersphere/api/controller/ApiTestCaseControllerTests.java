@@ -18,6 +18,10 @@ import io.metersphere.api.service.BaseFileManagementTestService;
 import io.metersphere.api.service.definition.ApiReportService;
 import io.metersphere.api.service.definition.ApiTestCaseService;
 import io.metersphere.api.utils.ApiDataUtils;
+import io.metersphere.plan.domain.TestPlanApiCase;
+import io.metersphere.plan.domain.TestPlanExample;
+import io.metersphere.plan.mapper.TestPlanApiCaseMapper;
+import io.metersphere.plan.mapper.TestPlanMapper;
 import io.metersphere.plugin.api.spi.AbstractMsTestElement;
 import io.metersphere.project.domain.ProjectVersion;
 import io.metersphere.project.dto.environment.EnvironmentConfig;
@@ -151,6 +155,10 @@ public class ApiTestCaseControllerTests extends BaseTest {
     private ApiScenarioMapper apiScenarioMapper;
     @Resource
     private ApiScenarioStepMapper apiScenarioStepMapper;
+    @Resource
+    private TestPlanMapper testPlanMapper;
+    @Resource
+    private TestPlanApiCaseMapper testPlanApiCaseMapper;
 
     @Override
     public String getBasePath() {
@@ -508,6 +516,7 @@ public class ApiTestCaseControllerTests extends BaseTest {
         apiRunModeRequest.setIntegratedReportName("aaaa");
         apiRunModeRequest.setPoolId("poolId");
         request.setRunModeConfig(apiRunModeRequest);
+        this.requestPostWithOk(BATCH_RUN, request);
         request.setProtocols(List.of("HTTP"));
         this.requestPostWithOk(BATCH_RUN, request);
 
@@ -769,6 +778,21 @@ public class ApiTestCaseControllerTests extends BaseTest {
         ApiTestCase first = apiTestCaseMapper.selectByExample(new ApiTestCaseExample()).getFirst();
         List<ApiReport> reports = new ArrayList<>();
         List<ApiTestCaseRecord> records = new ArrayList<>();
+
+        String planId = testPlanMapper.selectByExample(new TestPlanExample()).getFirst().getId();
+        TestPlanApiCase testPlanApiCase = new TestPlanApiCase();
+        testPlanApiCase.setTestPlanId(first.getId());
+        testPlanApiCase.setId(IDGenerator.nextStr());
+        testPlanApiCase.setApiCaseId(first.getId());
+        testPlanApiCase.setCreateUser("admin");
+        testPlanApiCase.setCreateTime(System.currentTimeMillis());
+        testPlanApiCase.setLastExecTime(System.currentTimeMillis());
+        testPlanApiCase.setLastExecReportId(IDGenerator.nextStr());
+        testPlanApiCase.setLastExecResult(ExecStatus.SUCCESS.name());
+        testPlanApiCase.setPos(1024l);
+        testPlanApiCase.setTestPlanCollectionId(planId);
+        testPlanApiCaseMapper.insert(testPlanApiCase);
+
         for (int i = 0; i < 10; i++) {
             ApiReport apiReport = new ApiReport();
             apiReport.setId(IDGenerator.nextStr());
@@ -784,6 +808,7 @@ public class ApiTestCaseControllerTests extends BaseTest {
             if (i % 2 == 0) {
                 apiReport.setStatus(ExecStatus.SUCCESS.name());
             } else {
+                apiReport.setTestPlanCaseId(testPlanApiCase.getId());
                 apiReport.setStatus(ExecStatus.ERROR.name());
             }
             apiReport.setTriggerMode("api-trigger-mode" + i);
@@ -834,6 +859,7 @@ public class ApiTestCaseControllerTests extends BaseTest {
         pageRequest.setProjectId(DEFAULT_PROJECT_ID);
         pageRequest.setPageSize(10);
         pageRequest.setCurrent(1);
+        requestPostWithOkAndReturn(PAGE, pageRequest);
         pageRequest.setProtocols(List.of("HTTP"));
         MvcResult mvcResult = requestPostWithOkAndReturn(PAGE, pageRequest);
         Pager<?> returnPager = parseObjectFromMvcResult(mvcResult, Pager.class);
@@ -914,8 +940,9 @@ public class ApiTestCaseControllerTests extends BaseTest {
         request.setType("Tags");
         request.setAppend(true);
         request.setSelectAll(true);
-        request.setProtocols(List.of("HTTP"));
         request.setTags(new LinkedHashSet<>(List.of("tag1", "tag3", "tag4")));
+        requestPostWithOkAndReturn(BATCH_EDIT, request);
+        request.setProtocols(List.of("HTTP"));
         requestPostWithOkAndReturn(BATCH_EDIT, request);
         ApiTestCaseExample example = new ApiTestCaseExample();
         List<String> ids = extApiTestCaseMapper.getIds(request, false);
@@ -1057,8 +1084,10 @@ public class ApiTestCaseControllerTests extends BaseTest {
         ApiTestCaseBatchRequest request = new ApiTestCaseBatchRequest();
         request.setProjectId(DEFAULT_PROJECT_ID);
         request.setSelectAll(false);
+        requestPostWithOkAndReturn(BATCH_DELETE_TO_GC, request);
         request.setSelectIds(List.of(apiTestCase.getId()));
         request.setExcludeIds(List.of(apiTestCase.getId()));
+        request.setProtocols(List.of("HTTP"));
         requestPostWithOkAndReturn(BATCH_DELETE_TO_GC, request);
 
         request.setSelectAll(true);
@@ -1089,6 +1118,7 @@ public class ApiTestCaseControllerTests extends BaseTest {
         pageRequest.setProjectId(DEFAULT_PROJECT_ID);
         pageRequest.setPageSize(10);
         pageRequest.setCurrent(1);
+        requestPostWithOkAndReturn(TRASH_PAGE, pageRequest);
         pageRequest.setProtocols(List.of("HTTP"));
         MvcResult mvcResult = requestPostWithOkAndReturn(TRASH_PAGE, pageRequest);
         Pager<?> returnPager = parseObjectFromMvcResult(mvcResult, Pager.class);
@@ -1139,9 +1169,10 @@ public class ApiTestCaseControllerTests extends BaseTest {
         ApiTestCaseBatchRequest request = new ApiTestCaseBatchRequest();
         request.setProjectId(DEFAULT_PROJECT_ID);
         request.setSelectAll(false);
+        requestPostWithOkAndReturn(BATCH_RECOVER, request);
+        request.setProtocols(List.of("HTTP"));
         request.setSelectIds(List.of(apiTestCase.getId()));
         request.setExcludeIds(List.of(apiTestCase.getId()));
-        request.setProtocols(List.of("HTTP"));
         requestPostWithOkAndReturn(BATCH_RECOVER, request);
 
         ApiDefinition apiDefinition = new ApiDefinition();
@@ -1214,9 +1245,15 @@ public class ApiTestCaseControllerTests extends BaseTest {
         ApiTestCaseBatchRequest request = new ApiTestCaseBatchRequest();
         request.setProjectId(DEFAULT_PROJECT_ID);
         request.setSelectAll(false);
+        requestPostWithOkAndReturn(BATCH_DELETE, request);
         request.setSelectIds(List.of(apiTestCase.getId()));
         request.setExcludeIds(List.of(apiTestCase.getId()));
+        request.setProtocols(List.of("HTTP"));
         requestPostWithOkAndReturn(BATCH_DELETE, request);
+        request.setSelectAll(true);
+        request.setExcludeIds(new ArrayList<>());
+        request.setApiDefinitionId("apiDefinitionId");
+        requestPostWithOkAndReturn(BATCH_DELETE_TO_GC, request);
         request.setProjectId(DEFAULT_PROJECT_ID);
         request.setSelectAll(true);
         request.setApiDefinitionId("apiDefinitionId");

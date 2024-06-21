@@ -36,7 +36,13 @@
     <!-- 报告明细开始 -->
     <div class="report-info">
       <reportInfoHeader v-model:keyword="cascaderKeywords" v-model:active-tab="activeTab" show-type="API" />
-      <TiledList :key-words="cascaderKeywords" show-type="API" :active-type="activeTab" :report-detail="detail || []" />
+      <TiledList
+        :key-words="cascaderKeywords"
+        show-type="API"
+        :get-report-step-detail="props.getReportStepDetail"
+        :active-type="activeTab"
+        :report-detail="detail || []"
+      />
     </div>
     <!-- 报告明细结束 -->
   </div>
@@ -52,6 +58,7 @@
   import TiledList from './tiledList.vue';
   import ReportMetricsItem from '@/views/test-plan/report/detail/component/ReportMetricsItem.vue';
 
+  import { toolTipConfig } from '@/config/testPlan';
   import { useI18n } from '@/hooks/useI18n';
   import { formatDuration } from '@/utils';
 
@@ -63,6 +70,7 @@
   const { t } = useI18n();
   const props = defineProps<{
     detailInfo?: ReportDetail;
+    getReportStepDetail?: (...args: any) => Promise<any>; // 获取步骤的详情内容接口
   }>();
 
   const detail = ref<ReportDetail>({
@@ -157,8 +165,7 @@
   const stepAnalysisLegendData = ref<LegendData[]>([]);
   const defaultCharOptions = {
     tooltip: {
-      show: false,
-      trigger: 'item',
+      ...toolTipConfig,
     },
     legend: {
       show: false,

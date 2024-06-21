@@ -100,7 +100,7 @@ export interface ApiDefinitionGetModuleParams {
   filter?: Record<string, any>;
   combine?: Record<string, any>;
   moduleIds: string[];
-  protocol: string;
+  protocols: string[];
   projectId: string;
   versionId?: string;
   refId?: string;
@@ -137,7 +137,7 @@ export interface Environment {
 export interface ApiDefinitionPageParams extends TableQueryParams {
   id: string;
   name: string;
-  protocol: string;
+  protocols: string[];
   projectId: string;
   versionId: string;
   refId: string;
@@ -180,7 +180,7 @@ export interface mockParams {
 }
 // 批量操作参数
 export interface ApiDefinitionBatchParams extends BatchApiParams {
-  protocol: string;
+  protocols: string[];
 }
 // 批量更新定义参数
 export interface ApiDefinitionBatchUpdateParams extends ApiDefinitionBatchParams {
@@ -279,7 +279,6 @@ export interface DefinitionReferencePageParams extends TableQueryParams {
 export interface ApiDefinitionDeleteParams {
   id: string;
   projectId: string;
-  protocol: string;
   deleteAll?: boolean;
 }
 
@@ -292,7 +291,7 @@ export interface BatchRecoverApiParams extends ApiDefinitionBatchParams {
 // --------------------用例
 // 用例列表查询参数
 export interface ApiCasePageParams extends TableQueryParams {
-  protocol: string;
+  protocols: string[];
   projectId: string;
   versionId?: string;
   refId?: string;
@@ -332,7 +331,7 @@ export interface ApiCaseDetail extends ExecuteRequestParams {
 }
 // 批量操作参数
 export interface ApiCaseBatchParams extends BatchApiParams {
-  protocol: string;
+  protocols: string[];
   apiDefinitionId?: string;
   versionId?: string;
 }
@@ -368,7 +367,7 @@ export interface ApiRunModeRequest {
 // 接口用例批量执行参数
 export interface ApiCaseBatchExecuteParams extends BatchApiParams {
   apiDefinitionId?: string | number;
-  protocol: string;
+  protocols: string[];
   versionId?: string;
   refId?: string;
   runModeConfig: ApiRunModeRequest;

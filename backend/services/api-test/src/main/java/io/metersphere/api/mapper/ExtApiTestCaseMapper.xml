@@ -66,9 +66,9 @@
         INNER JOIN api_definition a ON atc.api_definition_id = a.id
         WHERE atc.deleted =#{deleted}
         <include refid="queryWhereCondition"/>
-        <if test="!isRepeat">
+        <if test="!isRepeat and testPlanId != null">
             AND atc.id not in (
-            select test_plan_api_case.api_case_id from test_plan_api_case where test_plan_api_case.test_plan_id = #{request.testPlanId}
+            select test_plan_api_case.api_case_id from test_plan_api_case where test_plan_api_case.test_plan_id = #{testPlanId}
             )
         </if>
     </select>
@@ -255,9 +255,10 @@
         api_report.start_time,
         api_report.create_user,
         api_report.trigger_mode,
-        api_report.test_plan_id,
+        api_report.test_plan_case_id,
         api_report.deleted,
-        api_report.integrated
+        api_report.integrated,
+        api_report.test_plan_case_id as test_plan_id
         from api_report
         left join api_test_case_record atc on atc.api_report_id = api_report.id
         where
@@ -390,6 +391,30 @@
         )
         <include refid="queryByAssociateParam"/>
     </select>
+    <select id="getTestPlanNum" resultType="io.metersphere.api.dto.definition.ExecuteReportDTO">
+        select ar.id, test_plan.num as testPlanNum
+        from api_report ar
+        inner join test_plan_api_case tpac on ar.test_plan_case_id = tpac.id
+        inner join test_plan on tpac.test_plan_id = test_plan.id
+        <if test="ids != null and ids.size() > 0">
+            where ar.id in
+            <foreach collection="ids" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+    </select>
+    <select id="getCaseByResourceId" resultType="io.metersphere.api.domain.ApiTestCase">
+        select api_test_case.*
+        from api_test_case
+        inner join test_plan_api_case on api_test_case.id = test_plan_api_case.api_case_id
+        where test_plan_api_case.id = #{resourceId}
+    </select>
+    <select id="getCaseByReportId" resultType="io.metersphere.api.domain.ApiTestCase">
+        select atc.*
+        from api_test_case atc
+        inner join test_plan_report_api_case tprac on atc.id = tprac.api_case_id
+        where tprac.id = #{reportId}
+    </select>
 
     <sql id="report_filters">
         <if test="${filter} != null and ${filter}.size() > 0">
@@ -497,12 +522,6 @@
                         </when>
                         <when test="key=='status'">
                             and atc.status in
-                            <foreach collection="values" item="value" separator="," open="(" close=")">
-                                #{value}
-                            </foreach>
-                        </when>
-                        <when test="key=='caseStatus' or key=='case_status'">
-                            and atc.case_status in
                             <foreach collection="values" item="value" separator="," open="(" close=")">
                                 #{value}
                             </foreach>
