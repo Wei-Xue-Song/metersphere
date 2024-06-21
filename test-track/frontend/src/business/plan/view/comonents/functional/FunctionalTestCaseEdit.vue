@@ -364,6 +364,13 @@ export default {
       let mdImages = [];
       mdImages.push(...parseMdImage(param.description));
       mdImages.push(...parseMdImage(param.actualResult));
+      let comments = this.$refs.comment.comments;
+      if (comments) {
+        comments.forEach((item) => {
+          mdImages.push(...parseMdImage(item.description));
+        });
+      }
+
       // 将图片从临时目录移入正式目录
       saveMarkDownImg({
         projectId: getCurrentProjectID(),
@@ -487,6 +494,7 @@ export default {
       resetPlanCaseSystemField(this.testCaseTemplate.customFields, this.testCase);
     },
     openTestCaseEdit(testCase, tableData) {
+      this.reloadOtherInfo();
       checkProjectPermission(testCase.projectId).then((r) => {
         this.hasProjectPermission = r.data;
       });
